@@ -1,0 +1,48 @@
+version: "3.9"
+services:
+
+  db:
+    image: "postgres:latest"
+    networks:
+      - proxy
+    container_name: "postgres-database-server"
+    restart: "unless-stopped"
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      LOCAL_DOMAIN_NAME: $LOCAL_DOMAIN_NAME
+      BASE_VOLUME_DIRECTORY: $BASE_VOLUME_DIRECTORY
+    ports:
+      - "5432:5432"
+    volumes:
+      - "$BASE_VOLUME_DIRECTORY/postgres/db/data:/var/lib/postgresql/data"
+
+  pgadmin:
+    image: "dpage/pgadmin4:latest"
+    networks:
+      - proxy
+    container_name: "postgres-admin"
+    restart: "unless-stopped"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: $PGADMIN_DEFAULT_EMAIL
+      PGADMIN_DEFAULT_PASSWORD: $PGADMIN_DEFAULT_PASSWORD
+      LOCAL_DOMAIN_NAME: $LOCAL_DOMAIN_NAME
+      BASE_VOLUME_DIRECTORY: $BASE_VOLUME_DIRECTORY
+    volumes:
+      - "$BASE_VOLUME_DIRECTORY/postgres/admin/data:/var/lib/pgadmin"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pg-admin.entrypoints=http"
+      - "traefik.http.routers.pg-admin.rule=Host(`pg-admin.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.middlewares.pg-admin-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.pg-admin.middlewares=pg-admin-https-redirect"
+      - "traefik.http.routers.pg-admin-secure.entrypoints=https"
+      - "traefik.http.routers.pg-admin-secure.rule=Host(`pg-admin.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.pg-admin-secure.tls=true"
+      - "traefik.http.routers.pg-admin-secure.service=pg-admin"
+      - "traefik.http.services.pg-admin.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+
+networks:
+  proxy:
+    external: true
