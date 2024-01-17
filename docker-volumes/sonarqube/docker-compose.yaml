@@ -1,0 +1,32 @@
+version: "3.9"
+services:
+  sonarqube:
+    image: "sonarqube:community"
+    hostname: "sonar-qube.local.$LOCAL_DOMAIN_NAME"
+    networks:
+      - proxy
+    container_name: "sonarqube"
+    environment:
+      SONAR_JDBC_URL: "jdbc:postgresql://pg-admin.local.$LOCAL_DOMAIN_NAME:5432/sonar"
+      SONAR_JDBC_USERNAME: $SONAR_JDBC_USERNAME
+      SONAR_JDBC_PASSWORD: $SONAR_JDBC_PASSWORD
+    volumes:
+      - "$BASE_VOLUME_DIRECTORY/sonarqube/data/data:/opt/sonarqube/data"
+      - "$BASE_VOLUME_DIRECTORY/sonarqube/data/extensions:/opt/sonarqube/extensions"
+      - "$BASE_VOLUME_DIRECTORY/sonarqube/data/logs:/opt/sonarqube/logs"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sonar-qube.entrypoints=http"
+      - "traefik.http.routers.sonar-qube.rule=Host(`sonar-qube.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.middlewares.sonar-qube-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.sonar-qube.middlewares=sonar-qube-https-redirect"
+      - "traefik.http.routers.sonar-qube-secure.entrypoints=https"
+      - "traefik.http.routers.sonar-qube-secure.rule=Host(`sonar-qube.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.sonar-qube-secure.tls=true"
+      - "traefik.http.routers.sonar-qube-secure.service=sonar-qube"
+      - "traefik.http.services.sonar-qube.loadbalancer.server.port=9000"
+      - "traefik.docker.network=proxy"
+
+networks:
+  proxy:
+    external: true
