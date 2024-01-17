@@ -1,0 +1,41 @@
+version: "3.9"
+services:
+  pihole:
+    image: "pihole/pihole:latest"
+    container_name: "pi-hole"
+    restart: "unless-stopped"
+    networks:
+      - "proxy"
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp" # Only required if you are using Pi-hole as your DHCP server
+      - "8070:80/tcp"
+    environment:
+      - WEBPASSWORD=${PI_HOLE_WEB_UI_PASSWORD}
+      - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
+      - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "$BASE_VOLUME_DIRECTORY/pi-hole/data/etc-pi-hole:/etc/pihole"
+      - "$BASE_VOLUME_DIRECTORY/pi-hole/data/etc-dnsmasq.d:/etc/dnsmasq.d"
+    cap_add:
+      - "NET_ADMIN" # Required if you are using Pi-hole as your DHCP server, else not needed
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+      - "traefik.enable=true"
+      - "traefik.http.routers.pi-hole.entrypoints=http"
+      - "traefik.http.routers.pi-hole.rule=Host(`pi-hole.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.middlewares.pi-hole-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.pi-hole.middlewares=pi-hole-https-redirect"
+      - "traefik.http.routers.pi-hole-secure.entrypoints=https"
+      - "traefik.http.routers.pi-hole-secure.rule=Host(`pi-hole.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.pi-hole-secure.tls=true"
+      - "traefik.http.routers.pi-hole-secure.service=pi-hole"
+      - "traefik.http.services.pi-hole.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+
+networks:
+  proxy:
+    external: true
+
