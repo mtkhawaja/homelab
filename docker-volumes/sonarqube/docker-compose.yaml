@@ -6,6 +6,7 @@ services:
     networks:
       - proxy
     container_name: "sonarqube"
+    restart: "unless-stopped"
     environment:
       SONAR_JDBC_URL: "jdbc:postgresql://pg-admin.local.$LOCAL_DOMAIN_NAME:5432/sonar"
       SONAR_JDBC_USERNAME: $SONAR_JDBC_USERNAME
