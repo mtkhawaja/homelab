@@ -3,6 +3,7 @@ services:
   registry:
     image: "sonatype/nexus3"
     container_name: "registry"
+    restart: "unless-stopped"
     networks:
       - "proxy"
     environment:
