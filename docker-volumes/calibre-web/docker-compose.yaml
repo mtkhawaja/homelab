@@ -1,0 +1,34 @@
+version: "3.9"
+services:
+  calibre-web:
+    image: "lscr.io/linuxserver/calibre-web:latest"
+    container_name: "calibre-web"
+    restart: "unless-stopped"
+    networks:
+      - "proxy"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - DOCKER_MODS=linuxserver/mods:universal-calibre #optional
+      - OAUTHLIB_RELAX_TOKEN_SCOPE=1 #optional
+      - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
+      - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
+    volumes:
+      - "$LOCAL_DOMAIN_NAME/calibre/data/config:/config"
+      - "$LOCAL_DOMAIN_NAME/calibre/data/books:/books"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.calibre.entrypoints=http"
+      - "traefik.http.routers.calibre.rule=Host(`calibre.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.middlewares.calibre-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.calibre.middlewares=calibre-https-redirect"
+      - "traefik.http.routers.calibre-secure.entrypoints=https"
+      - "traefik.http.routers.calibre-secure.rule=Host(`calibre.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.calibre-secure.tls=true"
+      - "traefik.http.routers.calibre-secure.service=calibre"
+      - "traefik.http.services.calibre.loadbalancer.server.port=8083"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
