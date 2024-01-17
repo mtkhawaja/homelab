@@ -15,8 +15,8 @@ services:
       - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
       - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
     volumes:
-      - "$LOCAL_DOMAIN_NAME/calibre/data/config:/config"
-      - "$LOCAL_DOMAIN_NAME/calibre/data/books:/books"
+      - "$BASE_VOLUME_DIRECTORY/calibre/data/config:/config"
+      - "$BASE_VOLUME_DIRECTORY/calibre/data/books:/books"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.calibre.entrypoints=http"
