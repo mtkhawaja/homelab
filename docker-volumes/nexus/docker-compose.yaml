@@ -1,0 +1,40 @@
+version: "3.9"
+services:
+  registry:
+    image: "sonatype/nexus3"
+    container_name: "registry"
+    networks:
+      - "proxy"
+    environment:
+      - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
+      - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
+    volumes:
+      - "$BASE_VOLUME_DIRECTORY/nexus/data:/nexus-data"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      # Base Nexus URL
+      - "traefik.http.routers.registry.entrypoints=http"
+      - "traefik.http.routers.registry.rule=Host(`registry.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.middlewares.registry-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.registry.middlewares=registry-https-redirect"
+      - "traefik.http.routers.registry-secure.entrypoints=https"
+      - "traefik.http.routers.registry-secure.rule=Host(`registry.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.registry-secure.tls=true"
+      - "traefik.http.routers.registry-secure.service=registry"
+      - "traefik.http.services.registry.loadbalancer.server.port=8081"
+      # Docker Registry URL
+      - "traefik.http.routers.container-registry.entrypoints=http"
+      - "traefik.http.routers.container-registry.rule=Host(`container-registry.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.middlewares.container-registry-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.container-registry.middlewares=container-registry-https-redirect"
+      - "traefik.http.routers.container-registry-secure.entrypoints=https"
+      - "traefik.http.routers.container-registry-secure.rule=Host(`container-registry.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.container-registry-secure.tls=true"
+      - "traefik.http.routers.container-registry-secure.service=container-registry"
+      - "traefik.http.services.container-registry.loadbalancer.server.port=8082"
+
+networks:
+  proxy:
+    external: true
