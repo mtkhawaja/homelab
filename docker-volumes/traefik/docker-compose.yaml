@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  traefik:
+    image: "traefik:latest"
+    container_name: "traefik"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - CF_API_EMAIL=${CF_API_EMAIL}
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+      - TRAEFIK_BASIC_AUTH=${TRAEFIK_BASIC_AUTH}
+      - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
+      - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
+    networks:
+      - "proxy"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "$BASE_VOLUME_DIRECTORY/traefik/data/traefik.yml:/traefik.yml:ro"
+      - "$BASE_VOLUME_DIRECTORY/traefik/data/acme.json:/acme.json"
+      - "$BASE_VOLUME_DIRECTORY/traefik/data/config.yml:/config.yml:ro"
+    labels:
+      - "traefik.enable=true"
+      # Middleware
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=$TRAEFIK_BASIC_AUTH"
+      - "traefik.http.middlewares.traefik-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https"
+      # Routers
+      - "traefik.http.routers.traefik.entrypoints=http"
+      - "traefik.http.routers.traefik.rule=Host(`traefik-dashboard.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.traefik.middlewares=traefik-https-redirect"
+      - "traefik.http.routers.traefik-secure.entrypoints=https"
+      - "traefik.http.routers.traefik-secure.rule=Host(`traefik-dashboard.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.traefik-secure.middlewares=traefik-auth"
+      - "traefik.http.routers.traefik-secure.tls=true"
+      - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.traefik-secure.service=api@internal"
+      # Domain
+      - "traefik.http.routers.traefik-secure.tls.domains[0].main=local.$LOCAL_DOMAIN_NAME"
+      - "traefik.http.routers.traefik-secure.tls.domains[0].sans=*.local.$LOCAL_DOMAIN_NAME"
+
+networks:
+  proxy:
+    external: true

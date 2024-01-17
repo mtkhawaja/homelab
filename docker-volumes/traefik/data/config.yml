@@ -1,0 +1,63 @@
+http:
+  routers:
+    cockpit:
+      entryPoints:
+        - "https"
+      rule: "Host(`cockpit.local.🚨$LOCAL_DOMAIN🚨`)"
+      middlewares:
+        - default-headers
+        - https-redirectscheme
+      tls: { }
+      service: cockpit
+
+    asusRouter:
+      entryPoints:
+        - "https"
+      rule: "Host(`router.local.🚨$LOCAL_DOMAIN🚨`)"
+      middlewares:
+        - default-headers
+        - https-redirectscheme
+      tls: { }
+      service: asusRouter
+
+  services:
+    cockpit:
+      loadBalancer:
+        servers:
+          - url: "🚨$COCKPIT_SERVER_IP:PORT🚨"
+        passHostHeader: true
+    asusRouter:
+      loadBalancer:
+        servers:
+          - url: "🚨$ROUTER_IP:80🚨"
+
+  middlewares:
+    https-redirectscheme:
+      redirectScheme:
+        scheme: https
+        permanent: true
+    default-headers:
+      headers:
+        frameDeny: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 15552000
+        customFrameOptionsValue: SAMEORIGIN
+        customRequestHeaders:
+          X-Forwarded-Proto: https
+
+    default-whitelist:
+      ipWhiteList:
+        sourceRange:
+          - "10.0.0.0/8"
+          - "192.168.0.0/16"
+          - "172.16.0.0/12"
+
+    secured:
+      chain:
+        middlewares:
+          - default-whitelist
+          - default-headers
