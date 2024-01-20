@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   dashdot:
-    image: "mauricenino/dashdotdot:latest"
+    image: "mauricenino/dashdot:latest"
     restart: "unless-stopped"
     privileged: true
     networks:
