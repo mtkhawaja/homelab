@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  dashdot:
+    image: "mauricenino/dashdotdot:latest"
+    restart: "unless-stopped"
+    privileged: true
+    networks:
+      - "proxy"
+    environment:
+      - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
+      - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
+    volumes:
+      - "$BASE_VOLUME_DIRECTORY/dashdot/data/:/mnt/host:ro"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashdot.entrypoints=http"
+      - "traefik.http.routers.dashdot.rule=Host(`dashdot.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.middlewares.dashdot-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.dashdot.middlewares=dashdot-https-redirect"
+      - "traefik.http.routers.dashdot-secure.entrypoints=https"
+      - "traefik.http.routers.dashdot-secure.rule=Host(`dashdot.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.dashdot-secure.tls=true"
+      - "traefik.http.routers.dashdot-secure.service=dashdot"
+      - "traefik.http.services.dashdot.loadbalancer.server.port=3001"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true

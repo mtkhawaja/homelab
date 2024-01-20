@@ -201,6 +201,13 @@ services:
 - [docker-compose.yaml](./docker-volumes/calibre-web/docker-compose.yaml)
 - [Calibre Web - Installation Instructions](https://docs.linuxserver.io/images/docker-calibre-web/)
 
+### Dashdot
+
+> A modern server dashboard, running on the latest tech, designed with glassmorphism in mind. It is intended to be used for smaller VPS and private servers.
+
+- [docker-compose.yaml](./docker-volumes/dashdot/docker-compose.yaml)
+- [Dashdot - GitHub](https://github.com/MauriceNino/dashdot)
+
 ### Homarr
 
 > A simple, yet powerful dashboard for your server.
