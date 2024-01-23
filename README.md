@@ -215,6 +215,13 @@ services:
 - [docker-compose.yaml](./docker-volumes/homarr/docker-compose.yaml)
 - [Homarr - Installation Instructions](https://homarr.dev/docs/getting-started/installation/#-docker-compose)
 
+### Jenkins
+
+> The leading open source automation server
+
+- [docker-compose.yaml](./docker-volumes/jenkins/docker-compose.yaml)
+- [Jenkins - Dockerhub](https://hub.docker.com/r/jenkins/jenkins)
+
 ### Nexus Repository Manager
 
 > Nexus by Sonatype is a repository manager that organizes, stores and distributes artifacts needed for development.
