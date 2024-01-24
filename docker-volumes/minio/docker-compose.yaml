@@ -1,0 +1,40 @@
+version: "3.9"
+services:
+  homarr:
+    image: "quay.io/minio/minio:latest"
+    container_name: "minio"
+    restart: "unless-stopped"
+    networks:
+      - "proxy"
+    environment:
+      - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
+      - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    volumes:
+      - "$BASE_VOLUME_DIRECTORY/minio/data/:/data"
+    labels:
+      - "traefik.enable=true"
+      # Admin UI
+      - "traefik.http.routers.minio.entrypoints=http"
+      - "traefik.http.routers.minio.rule=Host(`minio.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.middlewares.minio-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.minio.middlewares=minio-https-redirect"
+      - "traefik.http.routers.minio-secure.entrypoints=https"
+      - "traefik.http.routers.minio-secure.rule=Host(`minio.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.minio-secure.tls=true"
+      - "traefik.http.routers.minio-secure.service=minio"
+      - "traefik.http.services.minio.loadbalancer.server.port=9001"
+      # API
+      - "traefik.http.routers.minio-api.rule=Host(`minio.api.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.middlewares.minio-api-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.minio-api.middlewares=minio-api-https-redirect"
+      - "traefik.http.routers.minio-api-secure.entrypoints=https"
+      - "traefik.http.routers.minio-api-secure.rule=Host(`minio-api.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.minio-api-secure.tls=true"
+      - "traefik.http.routers.minio-api-secure.service=minio-api"
+      - "traefik.http.services.minio-api.loadbalancer.server.port=9000"
+    command: server /data --console-address ":9001" --address ":9000"
+networks:
+  proxy:
+    external: true

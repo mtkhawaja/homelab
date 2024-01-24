@@ -222,6 +222,13 @@ services:
 - [docker-compose.yaml](./docker-volumes/jenkins/docker-compose.yaml)
 - [Jenkins - Dockerhub](https://hub.docker.com/r/jenkins/jenkins)
 
+### MinIO
+
+> High Performance, Kubernetes Native Object Storage
+
+- [docker-compose.yaml](./docker-volumes/minio/docker-compose.yaml)
+- [MinIO - Installation Instructions](https://min.io/docs/minio/container/index.html)
+
 ### Nexus Repository Manager
 
 > Nexus by Sonatype is a repository manager that organizes, stores and distributes artifacts needed for development.
