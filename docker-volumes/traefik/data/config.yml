@@ -20,7 +20,23 @@ http:
       tls: { }
       service: asusRouter
 
+    dockerHostMetrics:
+      entryPoints:
+        - "https"
+      rule: "Host(`docker-host-metrics.local.🚨$LOCAL_DOMAIN🚨`)"
+      middlewares:
+        - default-headers
+        - https-redirectscheme
+      tls: { }
+      service: dockerHostMetrics
+
   services:
+    dockerHostMetrics:
+      loadBalancer:
+        servers:
+          - url: "🚨$DOCKER_HOST_METRICS_IP:PORT🚨"
+        passHostHeader: true
+
     cockpit:
       loadBalancer:
         servers:

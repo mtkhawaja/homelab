@@ -229,6 +229,54 @@ services:
 - [docker-compose.yaml](./docker-volumes/minio/docker-compose.yaml)
 - [MinIO - Installation Instructions](https://min.io/docs/minio/container/index.html)
 
+### PLG Stack (Prometheus-Loki-Grafana)
+
+- [docker-compose.yaml](./docker-volumes/plg/docker-compose.yaml)
+
+#### Loki
+
+> Grafana Loki is a horizontally-scalable, highly-available, multi-tenant log aggregation system inspired by Prometheus.
+
+- [Loki - Dockerhub](https://hub.docker.com/r/grafana/loki)
+- [Loki - Installation Instructions](https://grafana.com/docs/loki/latest/installation/)
+- [Promtail - Dockerhub](https://hub.docker.com/r/grafana/promtail)
+- [Promtail - Installation Instructions](https://grafana.com/docs/loki/latest/clients/promtail/installation/)
+
+#### Prometheus
+
+> Prometheus is an open-source systems monitoring and alerting toolkit originally built at SoundCloud.
+
+- [Prometheus - Dockerhub](https://hub.docker.com/r/prom/prometheus)
+- [Prometheus - Installation Instructions](https://prometheus.io/docs/prometheus/latest/installation/)
+- [Node Exporter - Dockerhub](https://hub.docker.com/r/prom/node-exporter)
+- [Node Exporter - Installation Instructions](https://prometheus.io/docs/guides/node-exporter/)
+
+As per [docker's documentation](https://docs.docker.com/config/daemon/prometheus/), you'll need to enable the metrics endpoint in the [daemon.json](https://docs.docker.com/config/daemon/) for Prometheus to work:
+
+```json
+{
+  "metrics-addr": "127.0.0.1:9323"
+}
+```
+
+#### Grafana
+
+> Grafana is a multi-platform open source analytics and interactive visualization web application
+
+- [Grafana - Dockerhub](https://hub.docker.com/r/grafana/grafana)
+- [Grafana - Installation Instructions](https://grafana.com/docs/grafana/latest/installation/docker/)
+
+#### Fixing Permissions
+
+You may need to fix the permissions if you are using bind mounts:
+
+```shell
+#!/usr/bin/env bash
+
+sudo chown -R 472:472 $BASE_VOLUME_DIRECTORY/grafana/data/
+sudo chown -R 65534:65534 $BASE_VOLUME_DIRECTORY/prometheus/data/
+```
+
 ### Nexus Repository Manager
 
 > Nexus by Sonatype is a repository manager that organizes, stores and distributes artifacts needed for development.
