@@ -14,7 +14,7 @@ datasources:
     type: prometheus
     access: proxy
     # Access mode - proxy (server in the UI) or direct (browser in the UI).
-    url: http://localhost:9090
+    url: https://prometheus.local.🚨$LOCAL_DOMAIN🚨
     jsonData:
       httpMethod: POST
       manageAlerts: true
