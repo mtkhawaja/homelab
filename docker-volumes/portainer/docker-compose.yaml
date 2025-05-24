@@ -14,7 +14,7 @@ services:
       - "/etc/localtime:/etc/localtime:ro"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "$BASE_VOLUME_DIRECTORY/env-files:/env-files:ro"
-      - "$BASE_VOLUME_DIRECTORY/portainer/data:/data"
+      - "portainer_data:/data"
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
@@ -31,3 +31,7 @@ services:
 networks:
   proxy:
     external: true
+
+volumes:
+  portainer_data:
+    name: portainer_data
