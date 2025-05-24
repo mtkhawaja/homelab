@@ -1,3 +1,5 @@
+# Docker Compose Reference:
+# https://getdashdot.com/docs/installation/docker-compose
 services:
   dashdot:
     image: "mauricenino/dashdot:latest"
@@ -7,9 +9,8 @@ services:
       - "proxy"
     environment:
       - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
-      - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
     volumes:
-      - "$BASE_VOLUME_DIRECTORY/dashdot/data/:/mnt/host:ro"
+      - "/:/mnt/host:ro"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dashdot.entrypoints=http"
