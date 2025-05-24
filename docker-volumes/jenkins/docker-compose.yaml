@@ -14,7 +14,7 @@ services:
       - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
       - JAVA_OPTS="-Djava.awt.headless=true"
     volumes:
-      - "$BASE_VOLUME_DIRECTORY/jenkins/data:/var/jenkins_home"
+      - "jenkins-data:/var/jenkins_home"
       - "/var/run/docker.sock:/var/run/docker.sock"
     labels:
       - "traefik.enable=true"
@@ -31,3 +31,7 @@ services:
 networks:
   proxy:
     external: true
+
+volumes:
+  jenkins-data:
+    name: jenkins-data
