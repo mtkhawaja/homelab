@@ -24,12 +24,14 @@ services:
       - VERSION=docker
       - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
       - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
+      - SECONDARY_VOLUME_DIRECTORY=${SECONDARY_VOLUME_DIRECTORY}
       # Get Claim Token from here: https://www.plex.tv/claim/
     #      - PLEX_CLAIM="<get-from-above>"
     volumes:
       - "plex-config:/config"
       - "$BASE_VOLUME_DIRECTORY/plex/transcode:/transcode"
       - "$BASE_VOLUME_DIRECTORY/plex/media:/data"
+      - "$SECONDARY_VOLUME_DIRECTORY/plex/media:/secondary-data"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.plex.entrypoints=http"
