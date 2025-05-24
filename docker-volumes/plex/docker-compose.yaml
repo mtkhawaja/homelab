@@ -31,7 +31,7 @@ services:
       - "plex-config:/config"
       - "$BASE_VOLUME_DIRECTORY/plex/transcode:/transcode"
       - "$BASE_VOLUME_DIRECTORY/plex/media:/data"
-      - "$SECONDARY_VOLUME_DIRECTORY/plex/media:/secondary-data"
+      - "$SECONDARY_VOLUME_DIRECTORY:/secondary-data"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.plex.entrypoints=http"
