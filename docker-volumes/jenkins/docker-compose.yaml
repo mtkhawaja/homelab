@@ -1,6 +1,5 @@
 # Also see:
 # https://github.com/mtkhawaja/posts/tree/main/containerizing-jenkins-dood-and-dind
-version: "3.9"
 services:
   jenkins:
     container_name: jenkins
