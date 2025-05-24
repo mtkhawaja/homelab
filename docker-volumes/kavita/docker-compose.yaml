@@ -9,7 +9,9 @@ services:
       - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
       - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
     volumes:
-      - "$BASE_VOLUME_DIRECTORY/kavita/data/books:/manga"
+      - "$BASE_VOLUME_DIRECTORY/kavita/data/manga:/manga"
+      - "$BASE_VOLUME_DIRECTORY/kavita/data/comics:/comics"
+      - "$BASE_VOLUME_DIRECTORY/kavita/data/books:/books"
       - "kavita-config:/kavita/config"
     labels:
       - "traefik.enable=true"
