@@ -3,6 +3,8 @@ services:
     container_name: kavita
     restart: "unless-stopped"
     image: jvmilazz0/kavita:latest
+    networks:
+      - "proxy"
     environment:
       - TZ=America/New_York
       - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
@@ -25,10 +27,11 @@ services:
       - "traefik.http.routers.kavita-secure.service=kavita"
       - "traefik.http.services.kavita.loadbalancer.server.port=5000"
       - "traefik.docker.network=proxy"
-networks:
-  proxy:
-    external: true
 
 volumes:
   kavita-config:
     name: kavita-config
+
+networks:
+  proxy:
+    external: true
