@@ -10,9 +10,9 @@ services:
       - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - "$BASE_VOLUME_DIRECTORY/homarr/data/configs:/app/data/configs"
-      - "$BASE_VOLUME_DIRECTORY/homarr/data/data:/data"
-      - "$BASE_VOLUME_DIRECTORY/homarr/data/icons:/app/public/icons"
+      - "homarr-data:/app/data/configs"
+      - "homarr-data:/data"
+      - "homarr-data:/app/public/icons"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.homarr.entrypoints=http"
@@ -28,5 +28,10 @@ services:
 networks:
   proxy:
     external: true
+
+volumes:
+  homarr-data:
+    name: homarr-data
+
 
 
