@@ -1,9 +1,9 @@
 services:
-  sq-db:
+  sq-pg-db-server:
     image: "postgres:latest"
     networks:
       - proxy
-    container_name: "postgres-database-server"
+    container_name: "sq-pg-db-server"
     restart: "unless-stopped"
     environment:
       POSTGRES_USER: "${POSTGRES_USER:-postgres}"
@@ -24,7 +24,7 @@ services:
     container_name: "sonarqube"
     restart: "unless-stopped"
     environment:
-      SONAR_JDBC_URL: "jdbc:postgresql://sq-db:5432/sonar"
+      SONAR_JDBC_URL: "jdbc:postgresql://sq-pg-db-server:5432/sonar"
       SONAR_JDBC_USERNAME: "${POSTGRES_USER:-postgres}"
       SONAR_JDBC_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
     ulimits:
