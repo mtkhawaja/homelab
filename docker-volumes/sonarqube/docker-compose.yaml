@@ -12,9 +12,12 @@ services:
       BASE_VOLUME_DIRECTORY: $BASE_VOLUME_DIRECTORY
     volumes:
       - "sq-postgres-data:/var/lib/postgresql/data"
+      - "./init.sql:/docker-entrypoint-initdb.d/init.sql"
 
   sonarqube:
     image: "sonarqube:community"
+    depends_on:
+      - sq-db
     hostname: "sonar-qube.local.$LOCAL_DOMAIN_NAME"
     networks:
       - proxy
