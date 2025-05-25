@@ -1,4 +1,18 @@
 services:
+  sq-db:
+    image: "postgres:latest"
+    networks:
+      - proxy
+    container_name: "postgres-database-server"
+    restart: "unless-stopped"
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      LOCAL_DOMAIN_NAME: $LOCAL_DOMAIN_NAME
+      BASE_VOLUME_DIRECTORY: $BASE_VOLUME_DIRECTORY
+    volumes:
+      - "sq-postgres-data:/var/lib/postgresql/data"
+
   sonarqube:
     image: "sonarqube:community"
     hostname: "sonar-qube.local.$LOCAL_DOMAIN_NAME"
@@ -7,13 +21,17 @@ services:
     container_name: "sonarqube"
     restart: "unless-stopped"
     environment:
-      SONAR_JDBC_URL: "jdbc:postgresql://pg-admin.local.$LOCAL_DOMAIN_NAME:5432/sonar"
-      SONAR_JDBC_USERNAME: $SONAR_JDBC_USERNAME
-      SONAR_JDBC_PASSWORD: $SONAR_JDBC_PASSWORD
+      SONAR_JDBC_URL: "jdbc:postgresql://sq-db:5432/sonar"
+      SONAR_JDBC_USERNAME: "${POSTGRES_USER:-postgres}"
+      SONAR_JDBC_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     volumes:
-      - "$BASE_VOLUME_DIRECTORY/sonarqube/data/data:/opt/sonarqube/data"
-      - "$BASE_VOLUME_DIRECTORY/sonarqube/data/extensions:/opt/sonarqube/extensions"
-      - "$BASE_VOLUME_DIRECTORY/sonarqube/data/logs:/opt/sonarqube/logs"
+      - "sq-data:/opt/sonarqube/data"
+      - "sq-extensions:/opt/sonarqube/extensions"
+      - "sq-logs:/opt/sonarqube/logs"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.sonar-qube.entrypoints=http"
@@ -30,3 +48,14 @@ services:
 networks:
   proxy:
     external: true
+
+
+volumes:
+  sq-data:
+    name: sq-data
+  sq-postgres-data:
+    name: sq-postgres-data
+  sq-extensions:
+    name: sq-extensions
+  sq-logs:
+    name: sq-logs
