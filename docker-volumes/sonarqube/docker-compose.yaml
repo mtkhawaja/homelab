@@ -17,7 +17,7 @@ services:
   sonarqube:
     image: "sonarqube:community"
     depends_on:
-      - sq-db
+      - sq-pg-db-server
     hostname: "sonar-qube.local.$LOCAL_DOMAIN_NAME"
     networks:
       - proxy
