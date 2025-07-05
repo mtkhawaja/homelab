@@ -1,0 +1,51 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: "n8n"
+    restart: unless-stopped
+    networks:
+      - proxy
+    environment:
+      - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
+      - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
+      - N8N_HOST=n8n.local.${LOCAL_DOMAIN_NAME}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+      - WEBHOOK_URL=https://n8n.local.${LOCAL_DOMAIN_NAME}/
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-America/New_York}
+
+    volumes:
+      - n8n-data:/home/node/.n8n
+      - "${BASE_VOLUME_DIRECTORY}/n8n/data/files:/data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      # HTTP router
+      - "traefik.http.routers.n8n.rule=Host(`n8n.local.${LOCAL_DOMAIN_NAME}`)"
+      - "traefik.http.routers.n8n.entrypoints=http"
+      - "traefik.http.routers.n8n.middlewares=n8n-https-redirect"
+      - "traefik.http.middlewares.n8n-https-redirect.redirectscheme.scheme=https"
+      # HTTPS router
+      - "traefik.http.routers.n8n-secure.rule=Host(`n8n.local.${LOCAL_DOMAIN_NAME}`)"
+      - "traefik.http.routers.n8n-secure.entrypoints=https"
+      - "traefik.http.routers.n8n-secure.tls=true"
+      - "traefik.http.routers.n8n-secure.service=n8n"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+      # Optional security headers
+      - "traefik.http.routers.n8n-secure.middlewares=n8n-security"
+      - "traefik.http.middlewares.n8n-security.headers.SSLRedirect=true"
+      - "traefik.http.middlewares.n8n-security.headers.STSSeconds=315360000"
+      - "traefik.http.middlewares.n8n-security.headers.browserXSSFilter=true"
+      - "traefik.http.middlewares.n8n-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.n8n-security.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.n8n-security.headers.SSLHost=${LOCAL_DOMAIN_NAME}"
+      - "traefik.http.middlewares.n8n-security.headers.STSIncludeSubdomains=true"
+      - "traefik.http.middlewares.n8n-security.headers.STSPreload=true"
+
+networks:
+  proxy:
+    external: true
+
+volumes:
+  n8n-data:
