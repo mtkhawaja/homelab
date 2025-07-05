@@ -10,11 +10,10 @@ services:
       POSTGRES_USER: $POSTGRES_USER
       POSTGRES_PASSWORD: $POSTGRES_PASSWORD
       LOCAL_DOMAIN_NAME: $LOCAL_DOMAIN_NAME
-      BASE_VOLUME_DIRECTORY: $BASE_VOLUME_DIRECTORY
     ports:
       - "5432:5432"
     volumes:
-      - "$BASE_VOLUME_DIRECTORY/postgres/db/data:/var/lib/postgresql/data"
+      - pg-data:/var/lib/postgresql/data
 
   pgadmin:
     image: "dpage/pgadmin4:latest"
@@ -28,7 +27,7 @@ services:
       LOCAL_DOMAIN_NAME: $LOCAL_DOMAIN_NAME
       BASE_VOLUME_DIRECTORY: $BASE_VOLUME_DIRECTORY
     volumes:
-      - "$BASE_VOLUME_DIRECTORY/postgres/admin/data:/var/lib/pgadmin"
+      - pg-admin-data:/var/lib/pgadmin
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.pg-admin.entrypoints=http"
@@ -45,3 +44,7 @@ services:
 networks:
   proxy:
     external: true
+
+volumes:
+  pg-data:
+  pg-admin-data:
