@@ -1,0 +1,29 @@
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: unless-stopped
+    environment:
+      # Custom env vars used to automatically create a Redis ACL user
+      REDIS_SUPERUSER_USERNAME: ${REDIS_SUPERUSER_USERNAME}
+      REDIS_SUPERUSER_PASSWORD: ${REDIS_SUPERUSER_PASSWORD}
+      # These are common env vars for local paths
+      LOCAL_DOMAIN_NAME: $LOCAL_DOMAIN_NAME
+      BASE_VOLUME_DIRECTORY: $BASE_VOLUME_DIRECTORY
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - $BASE_VOLUME_DIRECTORY/redis/config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - $BASE_VOLUME_DIRECTORY/redis/scripts/docker-entrypoint-init.sh:/docker-entrypoint-init.sh:ro
+    networks:
+      - proxy
+    entrypoint: [ "/bin/bash", "/docker-entrypoint-init.sh" ]
+    command: [ "redis-server", "/usr/local/etc/redis/redis.conf" ]
+
+volumes:
+  redis-data:
+
+networks:
+  proxy:
+    external: true
