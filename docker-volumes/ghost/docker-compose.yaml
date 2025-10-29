@@ -1,0 +1,64 @@
+services:
+  db:
+    image: mysql:8.4
+    restart: always
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:ghost}
+      MYSQL_USER: ${MYSQL_USER:ghost}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:ghost}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:ghost}
+    volumes:
+      - ghost-mysql-data:/var/lib/mysql
+      # Uncomment out the following line to import data
+      # https://hub.docker.com/_/mysql/#initializing-a-fresh-instance
+      # - /path/to/db/dump.sql:/docker-entrypoint-initdb.d/dump.sql
+    networks:
+      - ghost_network
+
+  ghost:
+    image: ghost:6.5.3-alpine
+    restart: always
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - db
+    environment:
+      database__client: ${database__client:mysql}
+      database__connection__host: db
+      database__connection__port: 3306
+      database__connection__database: ${database__connection__database:ghost}
+      database__connection__user: ${database__connection__user:ghost}
+      database__connection__password: ${database__connection__password:ghost}
+      LOCAL_DOMAIN_NAME: ${LOCAL_DOMAIN_NAME}
+      url: https://${LOCAL_DOMAIN_NAME}
+      # Optionally, disable:
+      # see https://ghost.org/docs/config/#configuration-options
+      # security__staffDeviceVerification : false
+    volumes:
+      - ghost-application-data:/var/lib/ghost/content
+    networks:
+      - ghost_network
+      - proxy
+    labels:
+      - "traefik.enable : true"
+      - "traefik.http.routers.ghost.entrypoints : http"
+      - "traefik.http.routers.ghost.rule : Host(`$LOCAL_DOMAIN_NAME`) || Host(`www.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.middlewares.ghost-https-redirect.redirectscheme.scheme : https"
+      - "traefik.http.routers.ghost.middlewares : ghost-https-redirect"
+      - "traefik.http.routers.ghost-secure.entrypoints : https"
+      - "traefik.http.routers.ghost-secure.rule : Host(`$LOCAL_DOMAIN_NAME`) || Host(`www.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.ghost-secure.tls : true"
+      - "traefik.http.routers.ghost-secure.service : ghost"
+      - "traefik.http.services.ghost.loadbalancer.server.port : 2368"
+      - "traefik.docker.network : proxy"
+
+networks:
+  ghost_network:
+  proxy:
+    external: true
+
+volumes:
+  ghost-application-data:
+  ghost-mysql-data:
