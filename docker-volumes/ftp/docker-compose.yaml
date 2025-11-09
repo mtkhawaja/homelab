@@ -1,0 +1,26 @@
+services:
+  ftp-server:
+    image: "garethflowers/ftp-server"
+    container_name: "ftp"
+    restart: "unless-stopped"
+    networks:
+      - "proxy"
+    ports:
+      - "20-21:20-21/tcp"
+      - "40000-40009:40000-40009/tcp" # For passive mode
+    environment:
+      - UID=1000
+      - GID=1000
+      - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
+      - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
+      - PUBLIC_IP=192.168.0.1
+      - FTP_PASS=${FTP_PASS}
+      - FTP_USER=${FTP_USER}
+    volumes:
+      - "${BASE_VOLUME_DIRECTORY}/ftp/data:/home/${FTP_USER}"
+
+networks:
+  proxy:
+    external: true
+
+
