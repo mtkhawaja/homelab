@@ -1,0 +1,51 @@
+# Adapted from:
+# https://github.com/open-webui/open-webui/blob/main/docker-compose.yaml
+services:
+  ollama:
+    image: ollama/ollama:${OLLAMA_DOCKER_TAG-latest}
+    volumes:
+      - ollama:/root/.ollama
+    container_name: ollama
+    pull_policy: always
+    tty: true
+    restart: unless-stopped
+    networks:
+      - "proxy"
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:${WEBUI_DOCKER_TAG-main}
+    container_name: open-webui
+    volumes:
+      - open-webui:/app/backend/data
+    depends_on:
+      - ollama
+    environment:
+      # See https://docs.openwebui.com/getting-started/env-configuration/ for more information
+      - 'OLLAMA_BASE_URL=http://ollama:11434'
+      - 'WEBUI_SECRET_KEY='
+      - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      - "proxy"
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ollama.entrypoints=http"
+      - "traefik.http.routers.ollama.rule=Host(`ollama.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.middlewares.ollama-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.ollama.middlewares=ollama-https-redirect"
+      - "traefik.http.routers.ollama-secure.entrypoints=https"
+      - "traefik.http.routers.ollama-secure.rule=Host(`ollama.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.ollama-secure.tls=true"
+      - "traefik.http.routers.ollama-secure.service=ollama"
+      - "traefik.http.services.ollama.loadbalancer.server.port=8080"
+      - "traefik.docker.network=proxy"
+
+networks:
+  proxy:
+    external: true
+
+volumes:
+  ollama: { }
+  open-webui: { }
