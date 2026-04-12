@@ -1,0 +1,33 @@
+# https://github.com/databasus/databasus
+
+services:
+  databasus:
+    container_name: databasus
+    image: databasus/databasus:latest
+    volumes:
+      - databasus-data:/databasus-data
+    restart: unless-stopped
+    environment:
+      - SELF_HOSTED_SERVER_URL=${SELF_HOSTED_SERVER_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.databasus.entrypoints=http"
+      - "traefik.http.routers.databasus.rule=Host(`databasus.$SELF_HOSTED_SERVER_URL`)"
+      - "traefik.http.routers.databasus.middlewares=databasus-https-redirect"
+      - "traefik.http.routers.databasus-secure.entrypoints=https"
+      - "traefik.http.routers.databasus-secure.rule=Host(`databasus.$SELF_HOSTED_SERVER_URL`)"
+      - "traefik.http.routers.databasus-secure.tls=true"
+      - "traefik.http.routers.databasus-secure.service=databasus"
+      - "traefik.http.services.databasus.loadbalancer.server.port=4005"
+      - "traefik.http.middlewares.databasus-https-redirect.redirectscheme.scheme=https"
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
+
+volumes:
+  databasus_data:
+    name: databasus-data
