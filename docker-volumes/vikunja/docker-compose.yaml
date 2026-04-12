@@ -1,0 +1,60 @@
+services:
+  vikunja:
+    image: vikunja/vikunja:1.1.0
+    environment:
+      VIKUNJA_SERVICE_JWTSECRET: ${VIKUNJA_SERVICE_JWTSECRET}
+      VIKUNJA_DATABASE_HOST: vikunja-db
+      VIKUNJA_DATABASE_TYPE: postgres
+      VIKUNJA_DATABASE_USER: ${PG_DATABASE_USER:-vikunja}
+      VIKUNJA_DATABASE_PASSWORD: ${PG_DATABASE_PASSWORD:-postgres}
+      VIKUNJA_DATABASE_DATABASE: vikunja
+      VIKUNJA_SERVICE_PUBLICURL: https://vikunja.local.${LOCAL_DOMAIN_NAME}
+      LOCAL_DOMAIN_NAME: ${LOCAL_DOMAIN_NAME}
+      BASE_VOLUME_DIRECTORY: ${BASE_VOLUME_DIRECTORY}
+    volumes:
+      - ${BASE_VOLUME_DIRECTORY}/vikunja/data/files:/app/vikunja/files
+    networks:
+      - vikunja-internal
+      - proxy
+    depends_on:
+      vikunja-db:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.vikunja.entrypoints=http"
+      - "traefik.http.routers.vikunja.rule=Host(`vikunja.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.vikunja.middlewares=vikunja-https-redirect"
+      - "traefik.http.routers.vikunja-secure.entrypoints=https"
+      - "traefik.http.routers.vikunja-secure.rule=Host(`vikunja.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.vikunja-secure.tls=true"
+      - "traefik.http.routers.vikunja-secure.service=vikunja"
+      - "traefik.http.services.vikunja.loadbalancer.server.port=3456"
+      - "traefik.http.middlewares.vikunja-https-redirect.redirectscheme.scheme=https"
+
+  vikunja-db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${PG_DATABASE_USER:-vikunja}
+      POSTGRES_PASSWORD: ${PG_DATABASE_PASSWORD:-postgres}
+    volumes:
+      - db-data:/var/lib/postgresql
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -h localhost -U $$POSTGRES_USER" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - vikunja-internal
+
+networks:
+  proxy:
+    external: true
+  vikunja-internal:
+    driver: bridge
+
+volumes:
+  db-data:
+  vikunja-data:
