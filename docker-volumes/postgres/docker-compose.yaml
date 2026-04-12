@@ -9,11 +9,10 @@ services:
     environment:
       POSTGRES_USER: $POSTGRES_USER
       POSTGRES_PASSWORD: $POSTGRES_PASSWORD
-      LOCAL_DOMAIN_NAME: $LOCAL_DOMAIN_NAME
     ports:
       - "5432:5432"
     volumes:
-      - pg-data:/var/lib/postgresql/data
+      - pg-data:/var/lib/postgresql
 
   pgadmin:
     image: "dpage/pgadmin4:latest"
@@ -25,7 +24,6 @@ services:
       PGADMIN_DEFAULT_EMAIL: $PGADMIN_DEFAULT_EMAIL
       PGADMIN_DEFAULT_PASSWORD: $PGADMIN_DEFAULT_PASSWORD
       LOCAL_DOMAIN_NAME: $LOCAL_DOMAIN_NAME
-      BASE_VOLUME_DIRECTORY: $BASE_VOLUME_DIRECTORY
     volumes:
       - pg-admin-data:/var/lib/pgadmin
     labels:
