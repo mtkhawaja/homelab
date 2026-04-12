@@ -7,17 +7,15 @@ services:
       - proxy
     environment:
       - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
-      - BASE_VOLUME_DIRECTORY=${BASE_VOLUME_DIRECTORY}
       - N8N_HOST=n8n.local.${LOCAL_DOMAIN_NAME}
       - N8N_PORT=5678
       - N8N_PROTOCOL=https
       - NODE_ENV=production
       - WEBHOOK_URL=https://n8n.local.${LOCAL_DOMAIN_NAME}/
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-America/New_York}
-
     volumes:
-      - n8n-data:/home/node/.n8n
-      - "${BASE_VOLUME_DIRECTORY}/n8n/data/files:/data"
+      - n8n-config:/home/node/.n8n
+      - n8n-data:/data
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
@@ -49,3 +47,4 @@ networks:
 
 volumes:
   n8n-data:
+  n8n-config:
