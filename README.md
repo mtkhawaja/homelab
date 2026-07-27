@@ -120,7 +120,7 @@ docker compose \
 
 The web UI will be accessible via the following URL: [http://${DOCKER_HOST_IP}/admin](http://localhost/admin)
 
-**Note**: After traefik is up, you can access the web UI via the following URL: [https://pi-hole.local.$LOCAL_DOMAIN/admin](https://pi-hole.local.$LOCAL_DOMAIN/admin)
+**Note**: After traefik is up, you can access the web UI via the following URL: [https://pi-hole.$SERVICE_DOMAIN/admin](https://pi-hole.$SERVICE_DOMAIN/admin)
 
 #### Update Router DNS Settings
 
@@ -215,11 +215,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${SERVICE_NAME}.entrypoints=http"
-      - "traefik.http.routers.${SERVICE_NAME}.rule=Host(`${SERVICE_NAME}.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.${SERVICE_NAME}.rule=Host(`${SERVICE_NAME}.$SERVICE_DOMAIN`)"
       - "traefik.http.middlewares.${SERVICE_NAME}-https-redirect.redirectscheme.scheme=https"
       - "traefik.http.routers.${SERVICE_NAME}.middlewares=${SERVICE_NAME}-https-redirect"
       - "traefik.http.routers.${SERVICE_NAME}-secure.entrypoints=https"
-      - "traefik.http.routers.${SERVICE_NAME}-secure.rule=Host(`${SERVICE_NAME}.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.${SERVICE_NAME}-secure.rule=Host(`${SERVICE_NAME}.$SERVICE_DOMAIN`)"
       - "traefik.http.routers.${SERVICE_NAME}-secure.tls=true"
       - "traefik.http.routers.${SERVICE_NAME}-secure.service=${SERVICE_NAME}"
       - "traefik.http.services.${SERVICE_NAME}.loadbalancer.server.port=${SERVICE_PORT}"

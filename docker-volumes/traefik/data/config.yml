@@ -3,7 +3,7 @@ http:
     cockpit:
       entryPoints:
         - "https"
-      rule: "Host(`cockpit.local.🚨$LOCAL_DOMAIN🚨`)"
+      rule: "Host(`cockpit.🚨$SERVICE_DOMAIN🚨`)"
       middlewares:
         - default-headers
         - https-redirectscheme
@@ -13,7 +13,7 @@ http:
     asusRouter:
       entryPoints:
         - "https"
-      rule: "Host(`router.local.🚨$LOCAL_DOMAIN🚨`)"
+      rule: "Host(`router.🚨$SERVICE_DOMAIN🚨`)"
       middlewares:
         - default-headers
         - https-redirectscheme
@@ -23,7 +23,7 @@ http:
     dockerHostMetrics:
       entryPoints:
         - "https"
-      rule: "Host(`docker-host-metrics.local.🚨$LOCAL_DOMAIN🚨`)"
+      rule: "Host(`docker-host-metrics.🚨$SERVICE_DOMAIN🚨`)"
       middlewares:
         - default-headers
         - https-redirectscheme

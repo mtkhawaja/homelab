@@ -10,7 +10,7 @@ Doing this in advance will make it easier to run the docker-compose commands lat
 | Environment Variable / Label | Example                             | Description                                |
 |------------------------------|-------------------------------------|--------------------------------------------|
 | BASE_VOLUME_DIRECTORY        | /mnt/primary-storage/docker-volumes | Primarily used when defining bind mounts.  |
-| LOCAL_DOMAIN_NAME            | example.com                         | Primarily used for Traefik related labels. |
+| SERVICE_DOMAIN               | local.example.com                   | The domain services are published under. Traefik labels use `Host(\`<service>.$SERVICE_DOMAIN\`)`, so the `local.` prefix lives in the value rather than being repeated in every label. |
 
 These are custom environment variables that are used across multiple services.
 
@@ -64,7 +64,7 @@ certificatesResolvers:
 
 In the [config.yml](../traefik/data/config.yml) file:
 
-- $LOCAL_DOMAIN_NAME - Your domain name
+- $SERVICE_DOMAIN - The domain services are published under, e.g. `local.example.com`
 - $COCKPIT_SERVER_IP - The IP address of the machine running cockpit
 - $ROUTER_IP - The IP address of your router
 
