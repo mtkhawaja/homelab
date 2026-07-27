@@ -1,0 +1,22 @@
+[Unit]
+Description=Prune unused Docker images and build cache
+Documentation=https://docs.docker.com/reference/cli/docker/image/prune/
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+
+# Images with no container referencing them, older than 7 days.
+ExecStart=/usr/bin/docker image prune -af --filter until=168h
+# Build cache older than 7 days.
+ExecStart=/usr/bin/docker builder prune -af --filter until=168h
+
+# Deleting hundreds of GB of layers should never starve the containers.
+Nice=10
+IOWeight=50
+
+# Deliberately NOT pruning volumes or containers:
+#   docker volume prune    -> can destroy live application data
+#   docker container prune -> removes stopped containers, which in turn makes
+#                             their images eligible for the image prune above

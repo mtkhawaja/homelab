@@ -153,6 +153,52 @@ docker compose \
   --file "./docker-volumes/portainer/docker-compose.yaml" up --detach
 ```
 
+## Scheduled Host Maintenance
+
+Systemd units that run on the docker host itself (rather than in a container) live under
+[systemd/](./systemd), one directory per task. They are not installed by anything in this repo —
+copy them to the host and enable them manually:
+
+```bash
+#!/usr/bin/env bash
+
+sudo cp ./systemd/docker-prune/docker-prune.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now docker-prune.timer
+
+# Verify
+systemctl list-timers docker-prune.timer
+```
+
+### Docker Prune
+
+Weekly prune of unused Docker images and build cache.
+
+- [docker-prune.service](./systemd/docker-prune/docker-prune.service)
+- [docker-prune.timer](./systemd/docker-prune/docker-prune.timer)
+- [docker image prune - Documentation](https://docs.docker.com/reference/cli/docker/image/prune/)
+
+Runs Monday at 04:00, avoiding the Sunday-morning ZFS scrub and `e2scrub_all` windows.
+
+The `until=168h` filter is deliberate: a blind `prune -a` would delete images for any compose stack
+that happens to be down that week, forcing a re-pull.
+
+Volume and container pruning are intentionally excluded. `docker volume prune` can destroy live
+application data. Container pruning is the subtle one — removing stopped containers makes their
+images eligible for the image prune in the same run, so one invocation could cascade well past
+intent.
+
+`docker image prune` has no dry-run flag. To see how much is reclaimable beforehand, and to check
+the unit after a run:
+
+```bash
+#!/usr/bin/env bash
+
+docker system df
+sudo systemctl start docker-prune.service   # Trigger manually
+journalctl -u docker-prune.service -n 50
+```
+
 ## Services
 
 For any new service, ensure that the network we created earlier is used and that the following labels are defined:

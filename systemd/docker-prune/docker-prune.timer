@@ -1,0 +1,13 @@
+[Unit]
+Description=Weekly Docker image and build cache prune
+
+[Timer]
+# Monday rather than Sunday: ZFS scrubs and e2scrub_all already run Sunday
+# early morning.
+OnCalendar=Mon *-*-* 04:00:00
+# Run on next boot if the machine was off when this was due.
+Persistent=true
+RandomizedDelaySec=30m
+
+[Install]
+WantedBy=timers.target
