@@ -1,0 +1,49 @@
+# Tailnet-only DNS resolver providing split DNS for Tailscale clients.
+# See ../TAILSCALE.md for the design and setup steps.
+#
+# Documentation Reference:
+# https://coredns.io/plugins/bind/
+# https://coredns.io/plugins/template/
+#
+# This is the manual alternative to ../generate-dns-config.sh, which prints the
+# same config with both values already filled in. Use whichever you prefer.
+# The script carries its own copy inline so it can run standalone, so the two
+# are kept in sync by hand: change one, change the other.
+#
+# Replace both placeholders:
+#   - the zone name: the SERVICE_DOMAIN the Traefik labels use. If these differ,
+#     this resolver answers for a zone that nothing routes to.
+#   - the answer address: this host's tailnet address, from `tailscale ip -4`
+#
+# Then save the result to $BASE_VOLUME_DIRECTORY/dns/data/Corefile, which is the
+# path the compose file bind-mounts.
+#
+# This file is the complete configuration. CoreDNS applies no defaults beyond
+# what appears here.
+
+🚨$SERVICE_DOMAIN🚨 {
+    # Listen only on the Tailscale interface, so this resolver is unreachable
+    # from the LAN and never contends with systemd-resolved, which listens on
+    # 127.0.0.53 and 127.0.0.54.
+    # "Bind by interface name, binds to the IPs on that interface at the time of
+    # startup or reload."
+    bind tailscale0
+
+    # Every name in this zone answers with the host's tailnet address. The zone
+    # already scopes the template, so no match expression is needed. This covers
+    # the domain and every service beneath it:
+    #   plex.🚨$SERVICE_DOMAIN🚨, traefik-dashboard.🚨$SERVICE_DOMAIN🚨, ...
+    # Nothing here changes when a service is added.
+    template IN A {
+        answer "{{ .Name }} 60 IN A 🚨$TAILNET_IP🚨"
+    }
+
+    # Answer AAAA with an empty NOERROR (NODATA). Without this, IPv6-capable
+    # clients get no reply for AAAA and wait for a timeout before trying A.
+    template IN AAAA {
+        rcode NOERROR
+    }
+
+    log
+    errors
+}

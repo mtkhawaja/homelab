@@ -30,8 +30,19 @@ has only `*.env.example`. Copy and fill them before validating, and never commit
 
 ## Conventions
 
-- One dir per service under `docker-volumes/`, file named `docker-compose.yaml`.
-  (`karakeep` and `databasus` use `compose.yaml` — glob both when scripting.)
+- New and cleaned-up services live under `services/<name>/`. Legacy ones are still under
+  `docker-volumes/<name>/` and move to `services/` as they are reworked, so expect both during the
+  migration. File is named `docker-compose.yaml` (`karakeep` and `databasus` use `compose.yaml`, so
+  glob both when scripting).
+- Moving a service dir does not move its host data. Bind mounts are rooted at
+  `$BASE_VOLUME_DIRECTORY`, which is a host path independent of the repo layout.
+- Bind mounts must use absolute host paths, not relative ones. Relative paths resolve against the
+  compose file's directory on the CLI, but inside Portainer's own container for stacks deployed
+  there, so they silently point at the wrong place.
+- Config needing host-specific values is generated to stdout by a standalone script and saved under
+  `$BASE_VOLUME_DIRECTORY` (see `services/dns/generate-dns-config.sh`), keeping real domains out of
+  git. Older services instead commit a `🚨`-placeholder template filled in by hand on the host
+  (see `docker-volumes/traefik/data/config.yml`).
 - No `version:` key. The template in README.md still shows `version: "3.9"`; it is stale.
 - Every service joins the external `proxy` network. Do not publish ports — Traefik is the only
   ingress. Exceptions: traefik and pi-hole.
