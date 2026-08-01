@@ -1,0 +1,52 @@
+# Documentation Reference:
+# https://homarr.dev/docs/getting-started/installation/docker
+#
+# Required variables (docker-volumes/env-files/common.env):
+#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
+#
+# Pinned to the ajnart image, which is where this instance's data was written.
+# Homarr moved to ghcr.io/homarr-labs/homarr and v1 replaced the three mount
+# points below with a single /appdata and a required SECRET_ENCRYPTION_KEY.
+# That upgrade rewrites the data layout, so it is its own commit.
+services:
+  homarr:
+    image: "ghcr.io/ajnart/homarr:latest"
+    container_name: "homarr"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+    volumes:
+      # Powers the Docker integration widget. Read-write because Homarr can
+      # start and stop containers from the dashboard.
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      # One volume mounted at three paths, so configs, icons and data all share
+      # a single tree. Upstream v0.15 expects three separate directories; this
+      # is carried over as-is rather than rearranged under a running instance.
+      - "homarr-data:/app/data/configs"
+      - "homarr-data:/data"
+      - "homarr-data:/app/public/icons"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homarr.entrypoints=http"
+      - "traefik.http.routers.homarr.rule=Host(`homarr.$SERVICE_DOMAIN`)"
+      - "traefik.http.middlewares.homarr-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.homarr.middlewares=homarr-https-redirect"
+      - "traefik.http.routers.homarr-secure.entrypoints=https"
+      - "traefik.http.routers.homarr-secure.rule=Host(`homarr.$SERVICE_DOMAIN`)"
+      - "traefik.http.routers.homarr-secure.tls=true"
+      - "traefik.http.routers.homarr-secure.service=homarr"
+      - "traefik.http.services.homarr.loadbalancer.server.port=7575"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  homarr-data:
+    # Pinned, so it resolves to `homarr-data` rather than being namespaced to
+    # `homarr_homarr-data` by the project. Leave it: the existing volume on the
+    # host carries the unprefixed name.
+    name: homarr-data

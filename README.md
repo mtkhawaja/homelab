@@ -258,8 +258,8 @@ services:
 
 > A simple, yet powerful dashboard for your server.
 
-- [docker-compose.yaml](./docker-volumes/homarr/docker-compose.yaml)
-- [Homarr - Installation Instructions](https://homarr.dev/docs/getting-started/installation/#-docker-compose)
+- [docker-compose.yaml](./services/homarr/docker-compose.yaml)
+- [Homarr - Installation Instructions](https://homarr.dev/docs/getting-started/installation/docker)
 
 ### Jenkins
 
