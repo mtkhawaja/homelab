@@ -255,6 +255,18 @@ services:
 - [Dashdot - GitHub](https://github.com/MauriceNino/dashdot)
 - [Dashdot - Documentation](https://getdashdot.com/docs/installation/docker-compose)
 
+### Garage
+
+> An open-source distributed object storage service tailored for self-hosting.
+
+S3-compatible object storage, replacing MinIO. Generate `garage.toml` with
+[generate-garage-config.sh](./services/garage/generate-garage-config.sh) before the first start; it
+holds the RPC secret and admin token, so it is not kept in git.
+
+- [docker-compose.yaml](./services/garage/docker-compose.yaml)
+- [Garage - Quick Start](https://garagehq.deuxfleurs.fr/documentation/quick-start/)
+- [Garage - Real-world deployment](https://garagehq.deuxfleurs.fr/documentation/cookbook/real-world/)
+
 ### Homarr
 
 > A simple, yet powerful dashboard for your server.
