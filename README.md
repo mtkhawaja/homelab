@@ -403,6 +403,6 @@ information.
 
 > A process for automating Docker container base image updates.
 
-- [docker-compose.yaml](./docker-volumes/watchtower/docker-compose.yaml)
+- [docker-compose.yaml](./services/watchtower/docker-compose.yaml)
 - [Watchtower - Dockerhub](https://hub.docker.com/r/containrrr/watchtower)
 - [Documentation](https://containrrr.dev/watchtower) 

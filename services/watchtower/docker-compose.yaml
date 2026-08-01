@@ -1,0 +1,30 @@
+# Documentation Reference:
+# https://containrrr.dev/watchtower/
+#
+# Polls the registry and updates running containers whose image tag has moved.
+# This is what keeps the rest of the lab's `:latest` services current, and why
+# anything that breaks on an unattended major bump carries
+# `com.centurylinklabs.watchtower.enable=false`.
+#
+# No required variables: this service reads nothing from the env files.
+#
+# Watchtower has no HTTP surface, so it carries no Traefik labels and does not
+# join the `proxy` network. It reaches containers through the Docker socket
+# rather than over the network, and needs only outbound access to pull images.
+services:
+  watchtower:
+    # Deliberately floating rather than pinned. Watchtower updates itself on the
+    # same schedule it updates everything else.
+    image: "containrrr/watchtower:latest"
+    container_name: "watchtower"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # Only affects timestamps in the container's own logs.
+      - TZ=America/New_York
+    volumes:
+      # Must stay read-write. Watchtower stops, removes and recreates
+      # containers, so the read-only socket mount portainer uses would break it.
+      # Granting this is equivalent to granting root on the host.
+      - "/var/run/docker.sock:/var/run/docker.sock"
