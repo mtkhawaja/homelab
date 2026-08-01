@@ -17,7 +17,7 @@ docker compose \
 Reworked services live under `services/`; the ones still awaiting a pass are under
 `docker-volumes/`. Substitute whichever directory holds the service.
 
-Add a second `--env-file` for services with their own (pi-hole, traefik, postgres, sonarqube, minio).
+Add a second `--env-file` for services with their own (pi-hole, traefik, postgres, sonarqube).
 
 ## Validation
 
