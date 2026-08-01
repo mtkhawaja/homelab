@@ -1,25 +1,36 @@
-# Docker Compose Reference:
+# Documentation Reference:
 # https://getdashdot.com/docs/installation/docker-compose
+# https://getdashdot.com/docs/configuration
+#
+# Required variables (docker-volumes/env-files/common.env):
+#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
 services:
   dashdot:
     image: "mauricenino/dashdot:latest"
+    container_name: "dashdot"
     restart: "unless-stopped"
+    # Upstream requires this for hardware-level monitoring. CPU temperatures
+    # are the main feature that stops working without it. This is the least
+    # isolated container in the stack, and it is why no-new-privileges is
+    # absent here: privileged mode overrides it anyway.
     privileged: true
     networks:
       - "proxy"
     environment:
       - DASHDOT_ENABLE_CPU_TEMPS=true
-      - LOCAL_DOMAIN_NAME=${LOCAL_DOMAIN_NAME}
+      - TZ=America/New_York
     volumes:
+      # Read-only view of the host filesystem. dashdot reads storage and uptime
+      # stats from it, which is the whole point of the service.
       - "/:/mnt/host:ro"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dashdot.entrypoints=http"
-      - "traefik.http.routers.dashdot.rule=Host(`dashdot.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.dashdot.rule=Host(`dashdot.$SERVICE_DOMAIN`)"
       - "traefik.http.middlewares.dashdot-https-redirect.redirectscheme.scheme=https"
       - "traefik.http.routers.dashdot.middlewares=dashdot-https-redirect"
       - "traefik.http.routers.dashdot-secure.entrypoints=https"
-      - "traefik.http.routers.dashdot-secure.rule=Host(`dashdot.local.$LOCAL_DOMAIN_NAME`)"
+      - "traefik.http.routers.dashdot-secure.rule=Host(`dashdot.$SERVICE_DOMAIN`)"
       - "traefik.http.routers.dashdot-secure.tls=true"
       - "traefik.http.routers.dashdot-secure.service=dashdot"
       - "traefik.http.services.dashdot.loadbalancer.server.port=3001"

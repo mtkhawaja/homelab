@@ -251,8 +251,9 @@ services:
 
 > A modern server dashboard, running on the latest tech, designed with glassmorphism in mind. It is intended to be used for smaller VPS and private servers.
 
-- [docker-compose.yaml](./docker-volumes/dashdot/docker-compose.yaml)
+- [docker-compose.yaml](./services/dashdot/docker-compose.yaml)
 - [Dashdot - GitHub](https://github.com/MauriceNino/dashdot)
+- [Dashdot - Documentation](https://getdashdot.com/docs/installation/docker-compose)
 
 ### Homarr
 
