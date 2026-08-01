@@ -111,7 +111,13 @@ elif [[ ${ASSUME_YES} -eq 1 || ! -t 0 ]]; then
   service_domain="${DEFAULT_DOMAIN}"
   info "Using ${service_domain} (default, not prompting)"
 else
-  read -r "reply?    Domain to publish services under [${DEFAULT_DOMAIN}]: "
+  # `read` returns non-zero on EOF, which Ctrl-D produces even on a tty. Without
+  # this guard `set -e` would kill the script at the prompt with no message.
+  reply=""
+  if ! read -r "reply?    Domain to publish services under [${DEFAULT_DOMAIN}]: "; then
+    printf '\n' >&2
+    info "No input read, falling back to the default"
+  fi
   service_domain="${reply:-${DEFAULT_DOMAIN}}"
   info "Using ${service_domain}"
 fi
