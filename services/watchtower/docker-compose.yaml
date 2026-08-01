@@ -1,10 +1,14 @@
 # Documentation Reference:
-# https://containrrr.dev/watchtower/
+# https://watchtower.nickfedor.com/
+# https://github.com/nicholas-fedor/watchtower
 #
 # Polls the registry and updates running containers whose image tag has moved.
 # This is what keeps the rest of the lab's `:latest` services current, and why
 # anything that breaks on an unattended major bump carries
 # `com.centurylinklabs.watchtower.enable=false`.
+#
+# This is the community fork. containrrr/watchtower, the original, has not had
+# an image pushed since 2023 and carries a sole-maintainer notice.
 #
 # No required variables: this service reads nothing from the env files.
 #
@@ -15,7 +19,7 @@ services:
   watchtower:
     # Deliberately floating rather than pinned. Watchtower updates itself on the
     # same schedule it updates everything else.
-    image: "containrrr/watchtower:latest"
+    image: "nickfedor/watchtower:latest"
     container_name: "watchtower"
     restart: "unless-stopped"
     security_opt:

@@ -404,5 +404,6 @@ information.
 > A process for automating Docker container base image updates.
 
 - [docker-compose.yaml](./services/watchtower/docker-compose.yaml)
-- [Watchtower - Dockerhub](https://hub.docker.com/r/containrrr/watchtower)
-- [Documentation](https://containrrr.dev/watchtower) 
+- [Watchtower - Dockerhub](https://hub.docker.com/r/nickfedor/watchtower)
+- [Documentation](https://watchtower.nickfedor.com/)
+- [GitHub](https://github.com/nicholas-fedor/watchtower) 
