@@ -1,16 +1,31 @@
 # Documentation Reference:
 # https://homarr.dev/docs/getting-started/installation/docker
+# https://homarr.dev/docs/getting-started/after-the-installation
 #
 # Required variables (docker-volumes/env-files/common.env):
 #   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
 #
-# Pinned to the ajnart image, which is where this instance's data was written.
-# Homarr moved to ghcr.io/homarr-labs/homarr and v1 replaced the three mount
-# points below with a single /appdata and a required SECRET_ENCRYPTION_KEY.
-# That upgrade rewrites the data layout, so it is its own commit.
+# Also required, set wherever you keep secrets (a homarr.env passed as a second
+# --env-file, or common.env):
+#
+#   HOMARR_SECRET_ENCRYPTION_KEY - encrypts the integration credentials Homarr
+#     stores in its database. Generate with `openssl rand -hex 32`. Set it
+#     before the first start and do not change it afterwards: rotating it
+#     leaves every stored integration secret undecryptable. Compose refuses to
+#     start rather than running with a blank key.
+#
+# This is Homarr v1 on the homarr-labs image. The old ajnart image kept its
+# state in the `homarr-data` volume across three mount points; v1 uses a single
+# /appdata and cannot read that layout, so this points at a new volume.
+#
+# `homarr-data` is deliberately left in place on the host, not deleted. v1 does
+# not migrate it automatically: start the old container, export a ZIP from its
+# settings, then upload that during the v1 onboarding wizard. Keep the
+# encryption key the export hands you, or the integrations and users in it will
+# not decrypt. Remove the old volume once the import is confirmed.
 services:
   homarr:
-    image: "ghcr.io/ajnart/homarr:latest"
+    image: "ghcr.io/homarr-labs/homarr:latest"
     container_name: "homarr"
     restart: "unless-stopped"
     security_opt:
@@ -19,16 +34,14 @@ services:
       - "proxy"
     environment:
       - TZ=America/New_York
+      # See the header for how to generate this and why it must not be rotated.
+      - SECRET_ENCRYPTION_KEY=${HOMARR_SECRET_ENCRYPTION_KEY:?generate with `openssl rand -hex 32` and set it in an env file}
     volumes:
-      # Powers the Docker integration widget. Read-write because Homarr can
-      # start and stop containers from the dashboard.
+      # Optional upstream, kept because the Docker integration widget needs it.
+      # Read-write: Homarr can start and stop containers from the dashboard.
       - "/var/run/docker.sock:/var/run/docker.sock"
-      # One volume mounted at three paths, so configs, icons and data all share
-      # a single tree. Upstream v0.15 expects three separate directories; this
-      # is carried over as-is rather than rearranged under a running instance.
-      - "homarr-data:/app/data/configs"
-      - "homarr-data:/data"
-      - "homarr-data:/app/public/icons"
+      # Everything v1 persists, including its SQLite database.
+      - "homarr-appdata:/appdata"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.homarr.entrypoints=http"
@@ -45,8 +58,4 @@ networks:
   proxy:
     external: true
 volumes:
-  homarr-data:
-    # Pinned, so it resolves to `homarr-data` rather than being namespaced to
-    # `homarr_homarr-data` by the project. Leave it: the existing volume on the
-    # host carries the unprefixed name.
-    name: homarr-data
+  homarr-appdata:
