@@ -1,0 +1,71 @@
+# Documentation Reference:
+# https://hub.docker.com/r/sonatype/nexus3
+# https://help.sonatype.com/en/installation-methods.html
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY - host path for the /nexus-data bind mount
+#
+# Two hostnames: the Nexus UI on nexus.$SERVICE_DOMAIN, and its Docker registry
+# connector on container-registry.$SERVICE_DOMAIN. The connector needs its own
+# hostname because the Docker client cannot address a registry by path.
+#
+# The service, container and router were all previously named `registry`, which
+# collided with services/registry: the same router name and the same
+# `registry.$SERVICE_DOMAIN` host rule were declared by both stacks, and Traefik
+# resolved it non-deterministically. `registry` now unambiguously means the
+# upstream registry, and this is `nexus`.
+#
+# The container runs as uid 200, so $BASE_VOLUME_DIRECTORY/nexus/data has to be
+# owned by 200 before the first start.
+services:
+  nexus:
+    # Not pinned, but excluded from Watchtower below, so upgrades stay manual.
+    # Nexus migrates its database on a major upgrade and will not roll back.
+    image: "sonatype/nexus3:latest"
+    container_name: "nexus"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+    volumes:
+      # Verdict: convert to a named volume. Nexus alone reads this, and it is
+      # its blob store and database rather than anything browsed on the host.
+      # Left as a bind mount here so the move does not orphan it; the
+      # conversion, with the host-side copy, is its own commit.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for /nexus-data}/nexus/data:/nexus-data"
+    labels:
+      # Nexus will not survive an unattended major upgrade, so Watchtower is
+      # told to leave it alone.
+      - "com.centurylinklabs.watchtower.enable=false"
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      # Nexus UI
+      - "traefik.http.routers.nexus.entrypoints=http"
+      - "traefik.http.routers.nexus.rule=Host(`nexus.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.nexus-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.nexus.middlewares=nexus-https-redirect"
+      - "traefik.http.routers.nexus-secure.entrypoints=https"
+      - "traefik.http.routers.nexus-secure.rule=Host(`nexus.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.nexus-secure.tls=true"
+      - "traefik.http.routers.nexus-secure.service=nexus"
+      - "traefik.http.services.nexus.loadbalancer.server.port=8081"
+      # Docker registry connector
+      - "traefik.http.routers.container-registry.entrypoints=http"
+      - "traefik.http.routers.container-registry.rule=Host(`container-registry.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.container-registry-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.container-registry.middlewares=container-registry-https-redirect"
+      - "traefik.http.routers.container-registry-secure.entrypoints=https"
+      - "traefik.http.routers.container-registry-secure.rule=Host(`container-registry.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.container-registry-secure.tls=true"
+      - "traefik.http.routers.container-registry-secure.service=container-registry"
+      - "traefik.http.services.container-registry.loadbalancer.server.port=8082"
+networks:
+  proxy:
+    external: true

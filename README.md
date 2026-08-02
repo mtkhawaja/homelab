@@ -244,8 +244,20 @@ services:
 
 > Calibre-Web is a web app that offers a clean and intuitive interface for browsing, reading, and downloading eBooks using a valid Calibre database.
 
-- [docker-compose.yaml](./docker-volumes/calibre-web/docker-compose.yaml)
+- [compose.yaml](./services/calibre-web/compose.yaml)
 - [Calibre Web - Installation Instructions](https://docs.linuxserver.io/images/docker-calibre-web/)
+
+### Container Registry
+
+> A stateless, highly scalable server side application that stores and lets you distribute Docker images.
+
+The plain upstream registry. Nexus also serves a container registry, on
+`container-registry.$SERVICE_DOMAIN`. Authentication uses a bcrypt htpasswd file generated on the
+host; see the compose file header.
+
+- [compose.yaml](./services/registry/compose.yaml)
+- [Registry - Dockerhub](https://hub.docker.com/_/registry)
+- [Registry - Deployment guide](https://distribution.github.io/distribution/about/deploying/)
 
 ### Dashdot
 
@@ -291,6 +303,16 @@ holds the RPC secret and admin token, so it is not kept in git.
 
 - [docker-compose.yaml](./docker-volumes/jenkins/docker-compose.yaml)
 - [Jenkins - Dockerhub](https://hub.docker.com/r/jenkins/jenkins)
+
+### Kavita
+
+> Kavita is a fast, feature rich, cross platform reading server.
+
+Manga, comics and books stay bind mounts so the same trees remain reachable over Samba and FTP.
+
+- [compose.yaml](./services/kavita/compose.yaml)
+- [Kavita - Installation Instructions](https://wiki.kavitareader.com/installation/docker/)
+- [Kavita - Dockerhub](https://hub.docker.com/r/jvmilazz0/kavita)
 
 ### Mongo and Mongo Express
 
@@ -367,7 +389,11 @@ sudo chown -R 65534:65534 $BASE_VOLUME_DIRECTORY/prometheus/data/
 
 > Nexus by Sonatype is a repository manager that organizes, stores and distributes artifacts needed for development.
 
-- [docker-compose.yaml](./docker-volumes/nexus/docker-compose.yaml)
+Serves two hostnames: the UI on `nexus.$SERVICE_DOMAIN` and its Docker registry connector on
+`container-registry.$SERVICE_DOMAIN`. Excluded from Watchtower, since a major upgrade migrates the
+database and cannot be rolled back.
+
+- [compose.yaml](./services/nexus/compose.yaml)
 - [Nexus Repository Manager - Dockerhub](https://hub.docker.com/r/sonatype/nexus3)
 
 ### Pi-Hole

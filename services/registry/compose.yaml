@@ -1,0 +1,78 @@
+# Documentation Reference:
+# https://hub.docker.com/_/registry
+# https://distribution.github.io/distribution/about/deploying/
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY - host path holding the htpasswd file mounted below
+#   REGISTRY_HTTP_SECRET  - coordinates chunked uploads across replicas.
+#                           Generate with: openssl rand -hex 32
+#
+# The htpasswd file has to be bcrypt hashed. Create it on the host before the
+# first start:
+#
+#   mkdir -p "$BASE_VOLUME_DIRECTORY/registry/data/auth"
+#   docker run --rm --entrypoint htpasswd httpd:2 -Bbn <user> <pass> \
+#     > "$BASE_VOLUME_DIRECTORY/registry/data/auth/htpasswd"
+#
+# Note that nexus also serves a container registry, on
+# container-registry.$SERVICE_DOMAIN. This one is the plain upstream registry.
+services:
+  registry:
+    image: "registry:3"
+    container_name: "registry"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      TZ: "America/New_York"
+      REGISTRY_HTTP_ADDR: "0.0.0.0:5000"
+      REGISTRY_HTTP_SECRET: "${REGISTRY_HTTP_SECRET:?required - generate with openssl rand -hex 32}"
+      # Auth. The htpasswd file must be bcrypt hashed; see the header.
+      REGISTRY_AUTH: "htpasswd"
+      REGISTRY_AUTH_HTPASSWD_REALM: "Registry Realm"
+      REGISTRY_AUTH_HTPASSWD_PATH: "/auth/htpasswd"
+      # Needed for garbage collection to reclaim anything.
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      # Quieter than the default debug level.
+      REGISTRY_LOG_LEVEL: "warn"
+      # Off by default it targets localhost:4318 and fills the log with
+      # connection failures.
+      OTEL_TRACES_EXPORTER: "none"
+      OTEL_METRICS_EXPORTER: "none"
+      OTEL_LOGS_EXPORTER: "none"
+    volumes:
+      - "registry-data:/var/lib/registry"
+      # Stays a bind mount: the htpasswd file is generated and rotated on the
+      # host with the command in the header.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding the auth directory}/registry/data/auth:/auth:ro"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.registry.entrypoints=http"
+      - "traefik.http.routers.registry.rule=Host(`registry.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.registry-https-redirect.redirectscheme.scheme=https"
+      # Docker clients check this header to confirm they are talking to a v2
+      # registry.
+      - "traefik.http.middlewares.registry-headers.headers.customresponseheaders.Docker-Distribution-API-Version=registry/2.0"
+      # Both middlewares chained on one label. Assigning `.middlewares` twice
+      # silently keeps only the last, which previously dropped the HTTPS
+      # redirect entirely.
+      - "traefik.http.routers.registry.middlewares=registry-https-redirect,registry-headers"
+      - "traefik.http.routers.registry-secure.entrypoints=https"
+      - "traefik.http.routers.registry-secure.rule=Host(`registry.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.registry-secure.tls=true"
+      - "traefik.http.routers.registry-secure.service=registry"
+      - "traefik.http.routers.registry-secure.middlewares=registry-headers"
+      - "traefik.http.services.registry.loadbalancer.server.port=5000"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  registry-data:
+    driver: local

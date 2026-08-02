@@ -1,0 +1,53 @@
+# Documentation Reference:
+# https://wiki.kavitareader.com/installation/docker/
+# https://hub.docker.com/r/jvmilazz0/kavita
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY - host path for the three library bind mounts
+services:
+  kavita:
+    image: "jvmilazz0/kavita:latest"
+    container_name: "kavita"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+      # Avoids needing the full ICU dataset in the image.
+      - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
+    volumes:
+      # Libraries stay bind mounts: these are the same media trees reachable
+      # over Samba and FTP, and are added and pruned from the host rather than
+      # through Kavita.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the libraries}/kavita/data/manga:/manga"
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the libraries}/kavita/data/comics:/comics"
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the libraries}/kavita/data/books:/books"
+      # Application state: settings, users, reading progress, cover cache.
+      - "kavita-config:/kavita/config"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kavita.entrypoints=http"
+      - "traefik.http.routers.kavita.rule=Host(`kavita.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.kavita-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.kavita.middlewares=kavita-https-redirect"
+      - "traefik.http.routers.kavita-secure.entrypoints=https"
+      - "traefik.http.routers.kavita-secure.rule=Host(`kavita.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.kavita-secure.tls=true"
+      - "traefik.http.routers.kavita-secure.service=kavita"
+      - "traefik.http.services.kavita.loadbalancer.server.port=5000"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  kavita-config:
+    # Pinned, so it resolves to `kavita-config` rather than being namespaced to
+    # `kavita_kavita-config`. Leave it: the existing volume on the host carries
+    # the unprefixed name.
+    name: kavita-config
