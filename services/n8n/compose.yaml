@@ -1,0 +1,66 @@
+# Documentation Reference:
+# https://docs.n8n.io/hosting/installation/docker/
+# https://docs.n8n.io/hosting/configuration/environment-variables/
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
+#
+# Optional:
+#   GENERIC_TIMEZONE - schedule and cron timezone, defaults to America/New_York
+#
+# N8N_HOST and WEBHOOK_URL have to match the hostname Traefik publishes, or
+# webhook URLs shown in the editor point somewhere unreachable.
+services:
+  n8n:
+    image: "docker.n8n.io/n8nio/n8n:latest"
+    container_name: "n8n"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - "N8N_HOST=n8n.${SERVICE_DOMAIN:?required, see header}"
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+      - "WEBHOOK_URL=https://n8n.${SERVICE_DOMAIN:?required, see header}/"
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-America/New_York}
+    volumes:
+      # Workflows, credentials and the SQLite database.
+      - "n8n-config:/home/node/.n8n"
+      # Binary data written by workflows, when N8N_DEFAULT_BINARY_DATA_MODE is
+      # set to filesystem. Unused with the default in-memory mode.
+      - "n8n-data:/data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.n8n.entrypoints=http"
+      - "traefik.http.routers.n8n.rule=Host(`n8n.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.n8n-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.n8n.middlewares=n8n-https-redirect"
+      - "traefik.http.routers.n8n-secure.entrypoints=https"
+      - "traefik.http.routers.n8n-secure.rule=Host(`n8n.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.n8n-secure.tls=true"
+      - "traefik.http.routers.n8n-secure.service=n8n"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+      # HSTS and content sniffing protections. SSLRedirect and SSLHost were
+      # also set here; Traefik v3 removed both, along with SSLTemporaryRedirect,
+      # SSLForceHost and FeaturePolicy. The redirect they were meant to perform
+      # is what n8n-https-redirect above already does.
+      - "traefik.http.routers.n8n-secure.middlewares=n8n-security"
+      - "traefik.http.middlewares.n8n-security.headers.stsSeconds=315360000"
+      - "traefik.http.middlewares.n8n-security.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.n8n-security.headers.stsPreload=true"
+      - "traefik.http.middlewares.n8n-security.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.n8n-security.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.n8n-security.headers.contentTypeNosniff=true"
+networks:
+  proxy:
+    external: true
+volumes:
+  n8n-config:
+  n8n-data:

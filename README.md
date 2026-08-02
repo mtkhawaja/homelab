@@ -339,6 +339,17 @@ Traefik only proxies HTTP.
 - [Mongo - Dockerhub](https://hub.docker.com/_/mongo)
 - [Mongo Express - Dockerhub](https://hub.docker.com/_/mongo-express)
 
+### n8n
+
+> A workflow automation platform that combines AI with business process automation.
+
+`N8N_HOST` and `WEBHOOK_URL` have to match the hostname Traefik publishes, or webhook URLs shown in
+the editor point somewhere unreachable.
+
+- [compose.yaml](./services/n8n/compose.yaml)
+- [n8n - Docker installation](https://docs.n8n.io/hosting/installation/docker/)
+- [n8n - Environment variables](https://docs.n8n.io/hosting/configuration/environment-variables/)
+
 ### Redis
 
 > The open source, in-memory data store used by millions of developers as a cache, vector database, document database, streaming engine, and message broker.
