@@ -21,6 +21,22 @@
 # once the data directory exists, so a mismatch shows up as a failed login
 # rather than a fresh database.
 #
+# The database was previously postgres:latest mounted at
+# /var/lib/postgresql/data. It is now pinned to 18, matching every other
+# Postgres here, and mounted a level up because 18 moved its declared volume.
+#
+# That is a major version change, so it is not a restart. Any Postgres major
+# upgrade needs a dump and restore; the mount move is part of the same job:
+#
+#   docker exec sq-pg-db-server pg_dumpall -U "$SONARQUBE_DB_USER" > sq.sql
+#   docker compose ... down
+#   docker volume rm sq-postgres-data
+#   docker compose ... up --detach sq-pg-db-server
+#   docker exec -i sq-pg-db-server psql -U "$SONARQUBE_DB_USER" -d postgres < sq.sql
+#
+# Take the dump before pulling the new image. Once the container is running 18,
+# the old cluster is unreadable without downgrading again.
+#
 # SonarQube runs Elasticsearch internally and needs vm.max_map_count raised on
 # the host:
 #
@@ -30,11 +46,7 @@
 # reboot.
 services:
   sq-pg-db-server:
-    # Pinned to 17, not 18. Postgres 18 moved its declared volume up to
-    # /var/lib/postgresql and puts PGDATA in a versioned subdirectory, so the
-    # mount below would no longer contain the data directory. Upgrading past 17
-    # means moving the mount and running a pg_upgrade, not just a tag change.
-    image: "postgres:17"
+    image: "postgres:18"
     container_name: "sq-pg-db-server"
     restart: "unless-stopped"
     security_opt:
@@ -47,7 +59,10 @@ services:
       - "POSTGRES_USER=${SONARQUBE_DB_USER:?required - Postgres role owning the sonar database}"
       - "POSTGRES_PASSWORD=${SONARQUBE_DB_PASSWORD:?required - password for SONARQUBE_DB_USER}"
     volumes:
-      - "sq-postgres-data:/var/lib/postgresql/data"
+      # postgres:18 declares its volume at /var/lib/postgresql, one level above
+      # PGDATA at /var/lib/postgresql/18/docker. Matches every other Postgres
+      # in the repo.
+      - "sq-postgres-data:/var/lib/postgresql"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h localhost -U $$POSTGRES_USER -d sonar"]
       interval: 10s
