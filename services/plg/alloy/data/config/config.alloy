@@ -1,0 +1,65 @@
+// Grafana Alloy, replacing Promtail, which reached end of life on 2 March 2026.
+//
+// Ships host and container logs to Loki. Mounted at /etc/alloy/config.alloy by
+// services/plg/docker-compose.yaml.
+
+// Where everything below forwards to.
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}
+
+// Host logs under /var/log, matching Promtail's `varlogs` job.
+local.file_match "varlogs" {
+	path_targets = [{
+		__address__ = "localhost",
+		__path__    = "/var/log/*log",
+		job         = "varlogs",
+	}]
+}
+
+loki.source.file "varlogs" {
+	targets    = local.file_match.varlogs.targets
+	forward_to = [loki.write.default.receiver]
+}
+
+// Container logs. Alloy reads these through the Docker API rather than tailing
+// /var/lib/docker/containers/*/*log, so the JSON parsing and tag regex the
+// Promtail config needed to recover container metadata are gone: the labels
+// below come from Docker directly.
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	// Docker reports names as "/name".
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/?(.*)"
+		target_label  = "container_name"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_image"]
+		target_label  = "image_name"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_log_stream"]
+		target_label  = "stream"
+	}
+
+	rule {
+		target_label = "job"
+		replacement  = "containerlogs"
+	}
+}
+
+loki.source.docker "containers" {
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.containers.output
+	forward_to = [loki.write.default.receiver]
+}

@@ -4,7 +4,7 @@
 # https://grafana.com/docs/loki/latest/setup/install/docker/
 #
 # Prometheus for metrics, Loki for logs, Grafana over both, plus node_exporter
-# scraping host metrics and promtail shipping host and container logs.
+# scraping host metrics and Grafana Alloy shipping host and container logs.
 #
 # Required variables. Supply them however suits: common.env, a second
 # --env-file, the shell environment, or Portainer's stack variables. Guarded,
@@ -14,7 +14,7 @@
 #   BASE_VOLUME_DIRECTORY - host path for the config and data bind mounts
 #
 # These stay five containers rather than one. node_exporter needs the host PID
-# namespace and a root filesystem mount, and promtail needs the Docker socket;
+# namespace and a root filesystem mount, and Alloy needs the Docker socket;
 # folding either into a shared container would extend that reach to everything
 # else. Independent restarts matter too, since bouncing Loki should not take
 # Grafana down.
@@ -22,8 +22,16 @@
 # Grafana's bind mount needs `chown 472` and Prometheus's needs `chown 65534`
 # on the host before the first start.
 #
-# promtail reached end of life on 2 March 2026. Grafana Alloy replaces it and
-# ships a config converter. Replacing it is its own commit.
+# Alloy replaces Promtail, which reached end of life on 2 March 2026. Copy
+# alloy/data/config/config.alloy to
+# $BASE_VOLUME_DIRECTORY/plg/alloy/data/config/ before starting, and check it
+# with:
+#
+#   docker run --rm -v <path>/config.alloy:/etc/alloy/config.alloy:ro \
+#     grafana/alloy:latest validate /etc/alloy/config.alloy
+#
+# The old promtail container and its config directory can be removed once Alloy
+# is confirmed shipping.
 services:
   grafana:
     image: "grafana/grafana:latest"
@@ -130,9 +138,9 @@ services:
       - "traefik.http.services.loki.loadbalancer.server.port=3100"
       - "traefik.docker.network=proxy"
 
-  promtail:
-    image: "grafana/promtail:latest"
-    container_name: "promtail"
+  alloy:
+    image: "grafana/alloy:latest"
+    container_name: "alloy"
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
@@ -140,19 +148,38 @@ services:
       - "proxy"
     environment:
       - TZ=America/New_York
-    command: "-config.file=/etc/promtail/promtail-config.yaml"
+    command:
+      - "run"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "--storage.path=/var/lib/alloy/data"
+      - "/etc/alloy/config.alloy"
     depends_on:
       - loki
     volumes:
-      - "${BASE_VOLUME_DIRECTORY:?required, see header}/plg/promtail/data/config/promtail-config.yaml:/etc/promtail/promtail-config.yaml"
-      # Host and container logs, which is the whole job. Read-only where the
-      # scraper does not need to write.
+      - "${BASE_VOLUME_DIRECTORY:?required, see header}/plg/alloy/data/config/config.alloy:/etc/alloy/config.alloy:ro"
+      # Host logs, which is half the job.
       - "/var/log:/var/log:ro"
-      - "/var/lib/docker/containers:/var/lib/docker/containers:ro"
-      # Used for container metadata on the discovered log streams.
+      # Container logs come through the Docker API rather than by tailing
+      # /var/lib/docker/containers, so that mount is no longer needed.
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      # Write-ahead log and read positions. Without this Alloy re-reads every
+      # log file from the start after a restart.
+      - "alloy-data:/var/lib/alloy/data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.alloy.entrypoints=http"
+      - "traefik.http.routers.alloy.rule=Host(`alloy.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.alloy-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.alloy.middlewares=alloy-https-redirect"
+      - "traefik.http.routers.alloy-secure.entrypoints=https"
+      - "traefik.http.routers.alloy-secure.rule=Host(`alloy.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.alloy-secure.tls=true"
+      - "traefik.http.routers.alloy-secure.service=alloy"
+      - "traefik.http.services.alloy.loadbalancer.server.port=12345"
+      - "traefik.docker.network=proxy"
 networks:
   proxy:
     external: true
 volumes:
   loki-data:
+  alloy-data:

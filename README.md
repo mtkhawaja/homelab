@@ -360,8 +360,10 @@ namespace and a root filesystem mount, and `promtail` needs the Docker socket; m
 extend that reach across the rest. Grafana's bind mount needs `chown 472` and Prometheus's needs
 `chown 65534` on the host.
 
-**Promtail reached end of life on 2 March 2026.** [Grafana
-Alloy](https://grafana.com/docs/alloy/latest/) replaces it and ships a config converter.
+Log shipping is [Grafana Alloy](https://grafana.com/docs/alloy/latest/), which replaced Promtail
+after Promtail reached end of life on 2 March 2026. Alloy reads container logs through the Docker
+API rather than tailing `/var/lib/docker/containers`, so the JSON parsing and tag regex the Promtail
+config needed are gone. Its debugging UI is on `alloy.$SERVICE_DOMAIN`.
 
 #### Loki
 
@@ -369,8 +371,8 @@ Alloy](https://grafana.com/docs/alloy/latest/) replaces it and ships a config co
 
 - [Loki - Dockerhub](https://hub.docker.com/r/grafana/loki)
 - [Loki - Installation Instructions](https://grafana.com/docs/loki/latest/installation/)
-- [Promtail - Dockerhub](https://hub.docker.com/r/grafana/promtail)
-- [Promtail - Installation Instructions](https://grafana.com/docs/loki/latest/clients/promtail/installation/)
+- [Grafana Alloy - Dockerhub](https://hub.docker.com/r/grafana/alloy)
+- [Grafana Alloy - Docker installation](https://grafana.com/docs/alloy/latest/set-up/install/docker/)
 
 #### Prometheus
 
