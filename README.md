@@ -143,14 +143,14 @@ docker compose \
 
 ### Portainer
 
-Start the [portainer service](./docker-volumes/portainer/docker-compose.yaml) as follows:
+Start the [portainer service](./services/portainer/compose.yaml) as follows:
 
 ```bash
 #!/usr/bin/env bash
 
 docker compose \
   --env-file "./docker-volumes/env-files/common.env" \
-  --file "./docker-volumes/portainer/docker-compose.yaml" up --detach
+  --file "./services/portainer/compose.yaml" up --detach
 ```
 
 ## Scheduled Host Maintenance
@@ -549,7 +549,7 @@ database and cannot be rolled back.
 
 > Portainer is your container management software to deploy, troubleshoot, and secure applications across cloud, datacenter, and Industrial IoT use cases.
 
-- [docker-compose.yaml](./docker-volumes/portainer/docker-compose.yaml)
+- [compose.yaml](./services/portainer/compose.yaml)
 - [Portainer - Installation Instructions](https://docs.portainer.io/start/install-ce)
 
 ### Postgres and PgAdmin
