@@ -339,7 +339,15 @@ before the first start.
 
 ### PLG Stack (Prometheus-Loki-Grafana)
 
-- [docker-compose.yaml](./docker-volumes/plg/docker-compose.yaml)
+- [compose.yaml](./services/plg/compose.yaml)
+
+Five containers in one stack rather than one combined container. `node_exporter` needs the host PID
+namespace and a root filesystem mount, and `promtail` needs the Docker socket; merging either would
+extend that reach across the rest. Grafana's bind mount needs `chown 472` and Prometheus's needs
+`chown 65534` on the host.
+
+**Promtail reached end of life on 2 March 2026.** [Grafana
+Alloy](https://grafana.com/docs/alloy/latest/) replaces it and ships a config converter.
 
 #### Loki
 

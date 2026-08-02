@@ -1,0 +1,158 @@
+# Documentation Reference:
+# https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/
+# https://prometheus.io/docs/prometheus/latest/installation/
+# https://grafana.com/docs/loki/latest/setup/install/docker/
+#
+# Prometheus for metrics, Loki for logs, Grafana over both, plus node_exporter
+# scraping host metrics and promtail shipping host and container logs.
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY - host path for the config and data bind mounts
+#
+# These stay five containers rather than one. node_exporter needs the host PID
+# namespace and a root filesystem mount, and promtail needs the Docker socket;
+# folding either into a shared container would extend that reach to everything
+# else. Independent restarts matter too, since bouncing Loki should not take
+# Grafana down.
+#
+# Grafana's bind mount needs `chown 472` and Prometheus's needs `chown 65534`
+# on the host before the first start.
+#
+# promtail reached end of life on 2 March 2026. Grafana Alloy replaces it and
+# ships a config converter. Replacing it is its own commit.
+services:
+  grafana:
+    image: "grafana/grafana:latest"
+    container_name: "grafana"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+    volumes:
+      # Verdict: convert. Only Grafana reads this; it is the dashboard and user
+      # database rather than anything browsed on the host. Left as a bind mount
+      # so the move does not orphan it.
+      - "${BASE_VOLUME_DIRECTORY:?required, see header}/plg/grafana/data/grafana:/var/lib/grafana"
+      # Provisioned datasources, edited on the host.
+      - "${BASE_VOLUME_DIRECTORY:?required, see header}/plg/grafana/data/provisioning/datasources:/etc/grafana/provisioning/datasources"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.entrypoints=http"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.grafana-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.grafana.middlewares=grafana-https-redirect"
+      - "traefik.http.routers.grafana-secure.entrypoints=https"
+      - "traefik.http.routers.grafana-secure.rule=Host(`grafana.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.grafana-secure.tls=true"
+      - "traefik.http.routers.grafana-secure.service=grafana"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      - "traefik.docker.network=proxy"
+
+  prometheus:
+    image: "prom/prometheus:latest"
+    container_name: "prometheus"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+    volumes:
+      # Verdict: convert. The TSDB is Prometheus's alone.
+      - "${BASE_VOLUME_DIRECTORY:?required, see header}/plg/prometheus/data/prometheus:/prometheus"
+      # Scrape config, edited on the host.
+      - "${BASE_VOLUME_DIRECTORY:?required, see header}/plg/prometheus/data/config/prometheus.yaml:/etc/prometheus/prometheus.yml"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.entrypoints=http"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.prometheus-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.prometheus.middlewares=prometheus-https-redirect"
+      - "traefik.http.routers.prometheus-secure.entrypoints=https"
+      - "traefik.http.routers.prometheus-secure.rule=Host(`prometheus.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.prometheus-secure.tls=true"
+      - "traefik.http.routers.prometheus-secure.service=prometheus"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+      - "traefik.docker.network=proxy"
+
+  node_exporter:
+    image: "quay.io/prometheus/node-exporter:latest"
+    container_name: "prometheus-node-exporter"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    # Host PID namespace and a read-only root mount are what let this report on
+    # the host rather than on its own container. This is why it stays separate.
+    pid: "host"
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - "/:/host:ro,rslave"
+
+  loki:
+    image: "grafana/loki:latest"
+    container_name: "loki"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+    command: "-config.file=/etc/loki/local-config.yaml"
+    volumes:
+      - "${BASE_VOLUME_DIRECTORY:?required, see header}/plg/loki/data/config/local-config.yaml:/etc/loki/local-config.yaml"
+      # Chunks and the index. The config sets path_prefix to /tmp/loki, and
+      # nothing was mounted there, so every log was discarded whenever the
+      # container restarted. The mount point matches path_prefix rather than
+      # being somewhere tidier, so the config needs no change.
+      - "loki-data:/tmp/loki"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.loki.entrypoints=http"
+      - "traefik.http.routers.loki.rule=Host(`loki.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.loki-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.loki.middlewares=loki-https-redirect"
+      - "traefik.http.routers.loki-secure.entrypoints=https"
+      - "traefik.http.routers.loki-secure.rule=Host(`loki.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.loki-secure.tls=true"
+      - "traefik.http.routers.loki-secure.service=loki"
+      - "traefik.http.services.loki.loadbalancer.server.port=3100"
+      - "traefik.docker.network=proxy"
+
+  promtail:
+    image: "grafana/promtail:latest"
+    container_name: "promtail"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+    command: "-config.file=/etc/promtail/promtail-config.yaml"
+    depends_on:
+      - loki
+    volumes:
+      - "${BASE_VOLUME_DIRECTORY:?required, see header}/plg/promtail/data/config/promtail-config.yaml:/etc/promtail/promtail-config.yaml"
+      # Host and container logs, which is the whole job. Read-only where the
+      # scraper does not need to write.
+      - "/var/log:/var/log:ro"
+      - "/var/lib/docker/containers:/var/lib/docker/containers:ro"
+      # Used for container metadata on the discovered log streams.
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+networks:
+  proxy:
+    external: true
+volumes:
+  loki-data:
