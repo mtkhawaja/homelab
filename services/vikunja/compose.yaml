@@ -1,0 +1,101 @@
+# Documentation Reference:
+# https://vikunja.io/docs/full-docker-example/
+# https://vikunja.io/docs/config-options/
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY - host path for the attachments bind mount
+#   VIKUNJA_JWT_SECRET    - signs session tokens. Generate with:
+#                             openssl rand -hex 32
+#   VIKUNJA_DB_USER       - Postgres role owning the vikunja database
+#   VIKUNJA_DB_PASSWORD   - password for that role
+#
+# VIKUNJA_SERVICE_JWTSECRET was referenced but defined in no env file, so it
+# rendered as an empty string and Vikunja generated a fresh secret on every
+# start, logging everyone out on each restart. Rotating it now has that effect
+# once.
+#
+# The database credentials were PG_DATABASE_USER and PG_DATABASE_PASSWORD,
+# defaulting to vikunja/postgres. Twenty used the same two names, so setting them
+# for one stack silently changed the other. On an existing deployment set these
+# to what the database was actually initialised with. Postgres ignores them once
+# the data directory exists, so a mismatch shows up as a failed login.
+#
+# Only `vikunja` joins proxy. The database is private to this stack.
+services:
+  vikunja:
+    # Pinned rather than latest: 2.x runs one-way database migrations on start,
+    # so an unattended Watchtower jump across a major version is not something to
+    # leave to chance.
+    image: "vikunja/vikunja:2.4.0"
+    container_name: "vikunja"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "vikunja-internal"
+      - "proxy"
+    depends_on:
+      vikunja-db:
+        condition: service_healthy
+    environment:
+      VIKUNJA_SERVICE_JWTSECRET: "${VIKUNJA_JWT_SECRET:?required - generate with openssl rand -hex 32}"
+      VIKUNJA_DATABASE_TYPE: "postgres"
+      VIKUNJA_DATABASE_HOST: "vikunja-db"
+      VIKUNJA_DATABASE_DATABASE: "vikunja"
+      VIKUNJA_DATABASE_USER: "${VIKUNJA_DB_USER:?required - Postgres role owning the vikunja database}"
+      VIKUNJA_DATABASE_PASSWORD: "${VIKUNJA_DB_PASSWORD:?required - password for VIKUNJA_DB_USER}"
+      # Vikunja builds links and CORS rules from this, so it has to match the
+      # URL Traefik publishes.
+      VIKUNJA_SERVICE_PUBLICURL: "https://vikunja.${SERVICE_DOMAIN:?required, see header}"
+    volumes:
+      # Task attachments. Left a bind mount so this move changes no volume key.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the attachments bind mount}/vikunja/data/files:/app/vikunja/files"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vikunja.entrypoints=http"
+      - "traefik.http.routers.vikunja.rule=Host(`vikunja.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.vikunja-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.vikunja.middlewares=vikunja-https-redirect"
+      - "traefik.http.routers.vikunja-secure.entrypoints=https"
+      - "traefik.http.routers.vikunja-secure.rule=Host(`vikunja.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.vikunja-secure.tls=true"
+      - "traefik.http.routers.vikunja-secure.service=vikunja"
+      - "traefik.http.services.vikunja.loadbalancer.server.port=3456"
+      - "traefik.docker.network=proxy"
+
+  vikunja-db:
+    image: "postgres:18"
+    container_name: "vikunja-db"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "vikunja-internal"
+    environment:
+      # Was unset, so Postgres named the database after the role. Vikunja asks
+      # for `vikunja` specifically, so that only worked while the role happened
+      # to be called vikunja too, and any other user broke it.
+      POSTGRES_DB: "vikunja"
+      POSTGRES_USER: "${VIKUNJA_DB_USER:?required - Postgres role owning the vikunja database}"
+      POSTGRES_PASSWORD: "${VIKUNJA_DB_PASSWORD:?required - password for VIKUNJA_DB_USER}"
+    volumes:
+      # postgres:18 declares its volume at /var/lib/postgresql, one level above
+      # PGDATA at /var/lib/postgresql/18/docker.
+      - "db-data:/var/lib/postgresql"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U $$POSTGRES_USER -d vikunja"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+networks:
+  proxy:
+    external: true
+  vikunja-internal:
+    driver: bridge
+volumes:
+  db-data:

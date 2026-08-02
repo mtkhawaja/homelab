@@ -572,6 +572,17 @@ out.
 - [Twenty - Self-hosting with Docker Compose](https://twenty.com/developers/section/self-hosting/docker-compose)
 - [Twenty - GitHub](https://github.com/twentyhq/twenty)
 
+### Vikunja
+
+> The open-source, self-hostable to-do app.
+
+Pinned to a specific version rather than `latest`, since major releases run one-way database
+migrations on start. Task attachments live on a bind mount under `$BASE_VOLUME_DIRECTORY`.
+
+- [compose.yaml](./services/vikunja/compose.yaml)
+- [Vikunja - Full docker example](https://vikunja.io/docs/full-docker-example/)
+- [Vikunja - Config options](https://vikunja.io/docs/config-options/)
+
 ### Watchtower
 
 > A process for automating Docker container base image updates.
