@@ -1,0 +1,79 @@
+# Documentation Reference:
+# https://github.com/binhex/arch-qbittorrentvpn
+# https://github.com/binhex/documentation
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY - host path for the downloads and config mounts
+#   QBIT_LAN_NETWORK      - the LAN subnet in CIDR, e.g. 192.168.50.0/24
+#
+# qBittorrent routes everything through WireGuard and drops traffic that does not
+# match LAN_NETWORK, which is the kill switch. Traefik reaches this container over
+# the proxy network on a 172.x address, not from the LAN, so the docker range is
+# appended to LAN_NETWORK below. Without it the tunnel comes up, the WebUI
+# listens, and every request through Traefik is silently dropped by the
+# container's own firewall.
+#
+# Drop the WireGuard config at $BASE_VOLUME_DIRECTORY/qbit-mullvad/config/wireguard/wg0.conf.
+# The directory only appears after one start/stop cycle, so the first run is
+# expected to fail to connect.
+services:
+  qbit-mullvad:
+    image: "binhex/arch-qbittorrentvpn:latest"
+    container_name: "qbit-mullvad"
+    restart: "unless-stopped"
+    networks:
+      - "proxy"
+    # Required, not carelessness. binhex documents --cap-add=NET_ADMIN as enough
+    # for OpenVPN only; the WireGuard path needs full privileged mode along with
+    # the sysctl below. no-new-privileges is omitted for the same reason, since
+    # it would be meaningless next to this.
+    privileged: true
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    environment:
+      - VPN_ENABLED=yes
+      - VPN_PROV=custom
+      - VPN_CLIENT=wireguard
+      # Unused by the WireGuard path, which authenticates from wg0.conf, but the
+      # image still expects them to be present.
+      - VPN_USER=do-not-use
+      - VPN_PASS=do-not-use
+      - STRICT_PORT_FORWARD=yes
+      - ENABLE_PRIVOXY=yes
+      # The LAN, plus the docker bridge range so Traefik is not firewalled out.
+      - "LAN_NETWORK=${QBIT_LAN_NETWORK:?required - the LAN subnet in CIDR, e.g. 192.168.50.0/24},172.16.0.0/12"
+      - NAME_SERVERS=1.1.1.1,1.0.0.1
+      - WEBUI_PORT=8080
+      - PUID=1000
+      - PGID=1000
+      - DEBUG=false
+    volumes:
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the downloads and config mounts}/data/downloads:/data/downloads"
+      # Also holds wireguard/wg0.conf.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the downloads and config mounts}/qbit-mullvad/config:/config"
+      - "/etc/localtime:/etc/localtime:ro"
+    ports:
+      # Incoming peer connections. Not HTTP, so Traefik cannot carry them.
+      - "6881:6881"
+      - "6881:6881/udp"
+      # Privoxy, for LAN clients pointing their proxy settings at this host.
+      - "8118:8118"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.qbit.entrypoints=http"
+      - "traefik.http.routers.qbit.rule=Host(`qbit.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.qbit-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.qbit.middlewares=qbit-https-redirect"
+      - "traefik.http.routers.qbit-secure.entrypoints=https"
+      - "traefik.http.routers.qbit-secure.rule=Host(`qbit.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.qbit-secure.tls=true"
+      - "traefik.http.routers.qbit-secure.service=qbit"
+      - "traefik.http.services.qbit.loadbalancer.server.port=8080"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true

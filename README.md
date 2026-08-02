@@ -475,6 +475,22 @@ Five containers: the webserver plus Postgres, Redis, Gotenberg and Tika. Only th
 - [Paperless-ngx - Setup](https://docs.paperless-ngx.com/setup/)
 - [Paperless-ngx - Configuration](https://docs.paperless-ngx.com/configuration/)
 
+### qBittorrent over VPN
+
+> A BitTorrent client, with WireGuard and a kill switch that drops any traffic outside the tunnel.
+
+`QBIT_LAN_NETWORK` is the kill switch's allow list. The compose file appends the docker bridge range
+to it, because Traefik reaches the container over `proxy` rather than from the LAN and would
+otherwise be firewalled out by the container itself. Drop the WireGuard config at
+`$BASE_VOLUME_DIRECTORY/qbit-mullvad/config/wireguard/wg0.conf`; that directory only exists after one
+start/stop cycle, so the first run is expected to fail to connect.
+
+Runs `privileged: true`, which the WireGuard path requires. `NET_ADMIN` alone is only enough for
+OpenVPN.
+
+- [compose.yml](./services/qbit/compose.yml)
+- [binhex/arch-qbittorrentvpn - GitHub](https://github.com/binhex/arch-qbittorrentvpn)
+
 ### Redis
 
 > The open source, in-memory data store used by millions of developers as a cache, vector database, document database, streaming engine, and message broker.
