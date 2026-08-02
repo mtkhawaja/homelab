@@ -488,7 +488,7 @@ start/stop cycle, so the first run is expected to fail to connect.
 Runs `privileged: true`, which the WireGuard path requires. `NET_ADMIN` alone is only enough for
 OpenVPN.
 
-- [compose.yml](./services/qbit/compose.yml)
+- [compose.yaml](./services/qbit/compose.yaml)
 - [binhex/arch-qbittorrentvpn - GitHub](https://github.com/binhex/arch-qbittorrentvpn)
 
 ### Redis
