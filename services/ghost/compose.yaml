@@ -1,0 +1,93 @@
+# Documentation Reference:
+# https://hub.docker.com/_/ghost
+# https://ghost.org/docs/config/
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN         - Traefik host rules, e.g. local.example.com
+#   GHOST_DB_USER          - MySQL user owning the ghost database
+#   GHOST_DB_PASSWORD      - password for that user
+#   GHOST_DB_ROOT_PASSWORD - MySQL root password
+#
+# The credentials were written as ${MYSQL_USER:ghost}, which is not valid
+# Compose interpolation: a default needs :- and a guard needs :?, and a bare
+# colon is neither. The whole file failed to parse, so this stack could not be
+# deployed at all. On an existing deployment set these to what the database was
+# actually initialised with; MySQL ignores them once the data directory exists,
+# so a mismatch shows up as a failed login.
+#
+# Ghost stores absolute URLs in post content and in email, so `url` has to match
+# what Traefik publishes. It previously read https://$LOCAL_DOMAIN_NAME, which
+# rendered as https:// with nothing after it.
+#
+# Only `ghost` joins proxy. The database is private to this stack.
+services:
+  ghost:
+    image: "ghost:6.5.3-alpine"
+    container_name: "ghost"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "ghost-internal"
+      - "proxy"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Ghost maps nested config keys onto double underscores.
+      # See https://ghost.org/docs/config/
+      database__client: "mysql"
+      database__connection__host: "db"
+      database__connection__port: "3306"
+      database__connection__database: "ghost"
+      database__connection__user: "${GHOST_DB_USER:?required - MySQL user owning the ghost database}"
+      database__connection__password: "${GHOST_DB_PASSWORD:?required - password for GHOST_DB_USER}"
+      url: "https://ghost.${SERVICE_DOMAIN:?required, see header}"
+    volumes:
+      # Themes, images and the content of the site.
+      - "ghost-application-data:/var/lib/ghost/content"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ghost.entrypoints=http"
+      - "traefik.http.routers.ghost.rule=Host(`ghost.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.ghost-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.ghost.middlewares=ghost-https-redirect"
+      - "traefik.http.routers.ghost-secure.entrypoints=https"
+      - "traefik.http.routers.ghost-secure.rule=Host(`ghost.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.ghost-secure.tls=true"
+      - "traefik.http.routers.ghost-secure.service=ghost"
+      - "traefik.http.services.ghost.loadbalancer.server.port=2368"
+      - "traefik.docker.network=proxy"
+
+  db:
+    image: "mysql:8.4"
+    container_name: "ghost-db"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "ghost-internal"
+    environment:
+      MYSQL_DATABASE: "ghost"
+      MYSQL_USER: "${GHOST_DB_USER:?required - MySQL user owning the ghost database}"
+      MYSQL_PASSWORD: "${GHOST_DB_PASSWORD:?required - password for GHOST_DB_USER}"
+      MYSQL_ROOT_PASSWORD: "${GHOST_DB_ROOT_PASSWORD:?required - MySQL root password}"
+    volumes:
+      - "ghost-mysql-data:/var/lib/mysql"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+networks:
+  proxy:
+    external: true
+  ghost-internal:
+    driver: bridge
+volumes:
+  ghost-application-data:
+  ghost-mysql-data:

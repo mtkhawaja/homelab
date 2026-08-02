@@ -303,6 +303,17 @@ holds the RPC secret and admin token, so it is not kept in git.
 - [Garage - Quick Start](https://garagehq.deuxfleurs.fr/documentation/quick-start/)
 - [Garage - Real-world deployment](https://garagehq.deuxfleurs.fr/documentation/cookbook/real-world/)
 
+### Ghost
+
+> The world's most popular modern publishing platform for creating a new media platform.
+
+Ghost plus MySQL. Only Ghost is routed. Ghost stores absolute URLs in post content and email, so
+`url` has to match the hostname Traefik publishes.
+
+- [compose.yaml](./services/ghost/compose.yaml)
+- [Ghost - Dockerhub](https://hub.docker.com/_/ghost)
+- [Ghost - Configuration](https://ghost.org/docs/config/)
+
 ### Homarr
 
 > A simple, yet powerful dashboard for your server.
