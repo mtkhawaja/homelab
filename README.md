@@ -373,15 +373,19 @@ agent. Mounting the socket is equivalent to giving Jenkins root on the host.
 
 > A distributed event streaming platform.
 
-A KRaft cluster of three controllers and three brokers. Kafka speaks its own protocol rather than
-HTTP, so there are no Traefik labels: the brokers join `proxy` for other stacks to reach at
-`kafka-broker-N:19092`, and publish 29092, 39092 and 49092 for LAN clients. `KAFKA_ADVERTISED_HOST`
-is the address handed back to clients after the initial handshake, so it has to be one they can
-reach.
+A single KRaft node in combined broker and controller mode. Kafka speaks its own protocol rather
+than HTTP, so there are no Traefik labels: other stacks reach it over `proxy` at `kafka:19092`, and
+29092 is published for LAN clients. `KAFKA_ADVERTISED_HOST` is the address handed back to clients
+after the initial handshake, so it has to be one they can reach.
+
+Every listener requires SASL authentication, and the authorizer denies by default. `admin` is a
+superuser; `app` authenticates but has no access to anything until ACLs are granted to it. The
+compose file header has the commands.
 
 - [compose.yaml](./services/kafka/compose.yaml)
 - [Kafka - Dockerhub](https://hub.docker.com/r/apache/kafka)
 - [Kafka - KRaft documentation](https://kafka.apache.org/documentation/#kraft)
+- [Kafka - Authorization and ACLs](https://kafka.apache.org/documentation/#security_authz)
 
 ### Karakeep
 
