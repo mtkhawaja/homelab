@@ -1,1 +1,6 @@
 .idea
+
+# Real env files. The *.env.example templates are tracked; the filled-in
+# copies never are. Kept at the repo root so the rule applies wherever someone
+# puts one, not only under services/env-files/.
+*.env

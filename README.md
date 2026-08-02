@@ -15,7 +15,7 @@ I highly recommend watching the video and reading his guide. I will be using the
 - A domain name that you own:
     - This will cost approximately ~$10 USD per year depending on the domain name.
     - I use [CloudFlare](https://www.cloudflare.com/products/registrar).
-- All the necessary env files. See [Environment Variables & .env files](./docker-volumes/env-files/README.md) for more information.
+- All the necessary env files. See [Environment Variables & .env files](./services/env-files/README.md) for more information.
 
 ## Conventions
 
@@ -113,8 +113,8 @@ Start the [pi-hole service](./services/pi-hole) as follows:
 #!/usr/bin/env bash
 
 docker compose \
-  --env-file "./docker-volumes/env-files/common.env" \
-  --env-file "./docker-volumes/env-files/pi-hole.env" \
+  --env-file "./services/env-files/common.env" \
+  --env-file "./services/env-files/pi-hole.env" \
   --file "./services/pi-hole/compose.yaml" up --detach
 ```
 
@@ -136,8 +136,8 @@ Start the [traefik service](./services/traefik/compose.yaml) as follows:
 #!/usr/bin/env bash
 
 docker compose \
-  --env-file "./docker-volumes/env-files/common.env" \
-  --env-file "./docker-volumes/env-files/traefik.env" \
+  --env-file "./services/env-files/common.env" \
+  --env-file "./services/env-files/traefik.env" \
   --file "./services/traefik/compose.yaml" up --detach
 ```
 
@@ -149,7 +149,7 @@ Start the [portainer service](./services/portainer/compose.yaml) as follows:
 #!/usr/bin/env bash
 
 docker compose \
-  --env-file "./docker-volumes/env-files/common.env" \
+  --env-file "./services/env-files/common.env" \
   --file "./services/portainer/compose.yaml" up --detach
 ```
 

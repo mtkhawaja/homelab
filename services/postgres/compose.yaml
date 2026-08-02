@@ -8,7 +8,7 @@
 # Required variables. Supply them however suits: common.env, a second
 # --env-file, the shell environment, or Portainer's stack variables. The
 # credentials are guarded, so Compose refuses to start rather than running with
-# a blank one. docker-volumes/env-files/postgres.env.example is one convenient
+# a blank one. services/env-files/postgres.env.example is one convenient
 # place, not a requirement.
 #
 #   SERVICE_DOMAIN           - Traefik host rules, e.g. local.example.com

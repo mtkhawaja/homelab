@@ -2,7 +2,10 @@
 # https://getdashdot.com/docs/installation/docker-compose
 # https://getdashdot.com/docs/configuration
 #
-# Required variables (docker-volumes/env-files/common.env):
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
 #   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
 services:
   dashdot:

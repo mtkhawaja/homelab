@@ -2,12 +2,11 @@
 # https://homarr.dev/docs/getting-started/installation/docker
 # https://homarr.dev/docs/getting-started/after-the-installation
 #
-# Required variables (docker-volumes/env-files/common.env):
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
 #   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
-#
-# Also required, set wherever you keep secrets (a homarr.env passed as a second
-# --env-file, or common.env):
-#
 #   HOMARR_SECRET_ENCRYPTION_KEY - encrypts the integration credentials Homarr
 #     stores in its database. Generate with `openssl rand -hex 32`. Set it
 #     before the first start and do not change it afterwards: rotating it

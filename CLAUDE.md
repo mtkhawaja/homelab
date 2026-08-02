@@ -10,11 +10,11 @@ and Traefik routing breaks:
 
 ```bash
 docker compose \
-  --env-file "./docker-volumes/env-files/common.env" \
+  --env-file "./services/env-files/common.env" \
   --file "./services/<service>/compose.yaml" up --detach
 ```
 
-Every service lives under `services/`. `docker-volumes/` now holds only `env-files/`.
+Everything lives under `services/`. `docker-volumes/` is gone.
 
 Add a second `--env-file` for services with their own (pi-hole, traefik, postgres, sonarqube).
 
@@ -23,19 +23,23 @@ Add a second `--env-file` for services with their own (pi-hole, traefik, postgre
 There is no test suite or linter. The only check is:
 
 ```bash
-docker compose --env-file ./docker-volumes/env-files/common.env \
+docker compose --env-file ./services/env-files/common.env \
   --file ./services/<service>/compose.yaml config
 ```
 
-This requires real `.env` files — `docker-volumes/env-files/.gitignore` is `*.env`, so a fresh clone
-has only `*.env.example`. Copy and fill them before validating, and never commit the result.
+This requires real `.env` files. The repo-root `.gitignore` ignores `*.env` everywhere, so a fresh
+clone has only `*.env.example`. Copy and fill them before validating; the ignore rule is what keeps
+the result out of git no matter which directory you put it in.
 
 ## Conventions
 
 - Services live under `services/<name>/`, one directory each, and the file is always named
   `compose.yaml` — the name the Compose Spec defines and Docker looks for first.
   `docker-compose.yaml` is the legacy fallback and no longer appears in this repo, so there is
-  nothing left to glob for. `docker-volumes/` holds only `env-files/`; nothing else belongs there.
+  nothing left to glob for. `services/env-files/` is the one directory there that is not a service;
+  it holds the `*.env.example` templates and the filled-in `*.env` files, which the root
+  `.gitignore` keeps untracked. Glob `services/*/compose.yaml` rather than `services/*` and it never
+  matters.
 - Moving a service dir does not move its host data. Bind mounts are rooted at
   `$BASE_VOLUME_DIRECTORY`, which is a host path independent of the repo layout.
 - Bind mounts must use absolute host paths, not relative ones. Relative paths resolve against the

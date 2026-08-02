@@ -13,7 +13,10 @@
 # image, and because the mounted Corefile is the complete configuration. There
 # are no image defaults to merge with or discover at runtime.
 #
-# Required variables (docker-volumes/env-files/common.env):
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
 #   BASE_VOLUME_DIRECTORY - host path for the Corefile bind mount
 services:
   coredns:
