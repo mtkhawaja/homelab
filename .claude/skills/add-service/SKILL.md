@@ -7,7 +7,7 @@ description: Use when adding a new service to this homelab repo, or when moving 
 
 CLAUDE.md already carries the conventions (layout, Traefik labels, `SERVICE_DOMAIN`, volume
 preference, validation, commit format) and is loaded every session. **Do not restate or re-derive
-it.** Copy the file shape from `docker-volumes/calibre-web/docker-compose.yaml`, the current
+it.** Copy the file shape from `services/calibre-web/compose.yaml`, the current
 reference implementation.
 
 This skill covers only what reading the repo does not already tell you.

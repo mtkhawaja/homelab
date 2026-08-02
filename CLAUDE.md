@@ -11,7 +11,7 @@ and Traefik routing breaks:
 ```bash
 docker compose \
   --env-file "./docker-volumes/env-files/common.env" \
-  --file "./services/<service>/docker-compose.yaml" up --detach
+  --file "./services/<service>/compose.yaml" up --detach
 ```
 
 Reworked services live under `services/`; the ones still awaiting a pass are under
@@ -25,7 +25,7 @@ There is no test suite or linter. The only check is:
 
 ```bash
 docker compose --env-file ./docker-volumes/env-files/common.env \
-  --file ./services/<service>/docker-compose.yaml config
+  --file ./services/<service>/compose.yaml config
 ```
 
 This requires real `.env` files — `docker-volumes/env-files/.gitignore` is `*.env`, so a fresh clone
@@ -35,8 +35,10 @@ has only `*.env.example`. Copy and fill them before validating, and never commit
 
 - New and cleaned-up services live under `services/<name>/`. Legacy ones are still under
   `docker-volumes/<name>/` and move to `services/` as they are reworked, so expect both during the
-  migration. File is named `docker-compose.yaml` (`karakeep` and `databasus` use `compose.yaml`, so
-  glob both when scripting).
+  migration. File is named `compose.yaml`, the name the Compose Spec defines and Docker looks for
+  first; `docker-compose.yaml` is the legacy fallback. Everything under `services/` uses the new
+  name. Services still under `docker-volumes/` use the old one and get renamed as part of their
+  rework, so glob both when scripting until the migration finishes.
 - Moving a service dir does not move its host data. Bind mounts are rooted at
   `$BASE_VOLUME_DIRECTORY`, which is a host path independent of the repo layout.
 - Bind mounts must use absolute host paths, not relative ones. Relative paths resolve against the
@@ -60,7 +62,7 @@ has only `*.env.example`. Copy and fill them before validating, and never commit
   and plex for client discovery. `dns` is the one exception, using `network_mode: host`.
 - Routing hostname is `<service>.$SERVICE_DOMAIN`. The `local.` prefix lives inside the value, so the
   label is `` Host(`<service>.$SERVICE_DOMAIN`) `` and never `<service>.local.$SERVICE_DOMAIN`. Copy
-  the 11-label Traefik block from `services/dashdot/docker-compose.yaml`. `stirling-pdf` deviates
+  the 11-label Traefik block from `services/dashdot/compose.yaml`. `stirling-pdf` deviates
   with `$SELF_HOSTED_SERVER_URL`; do not copy that one.
 - Most services under `docker-volumes/` still reference the removed `$LOCAL_DOMAIN_NAME` and render
   `` Host(`<service>.local.`) `` rather than failing. Fix it in the service being worked on, not
@@ -90,6 +92,6 @@ has only `*.env.example`. Copy and fill them before validating, and never commit
 This repo uses sentence-case past tense with a markdown link, overriding the imperative-lowercase
 rule in global memory:
 
-    feat: Added docker-compose.yaml for [Service](https://upstream.example.com)
+    feat: Added compose.yaml for [Service](https://upstream.example.com)
 
 `fix:` for changes to existing services.

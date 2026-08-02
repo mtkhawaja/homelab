@@ -199,7 +199,7 @@ $(printf '\033[1m==> Next steps\033[0m')
        Then start the resolver:
          docker compose \\
            --env-file "./docker-volumes/env-files/common.env" \\
-           --file "./services/dns/docker-compose.yaml" up --detach
+           --file "./services/dns/compose.yaml" up --detach
 
     2. Register the resolver as a restricted nameserver (split DNS):
        https://login.tailscale.com/admin/dns

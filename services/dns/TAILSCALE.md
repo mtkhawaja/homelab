@@ -4,7 +4,7 @@ Remote access to the home lab over [Tailscale](https://tailscale.com), keeping o
 that works on the LAN with no VPN connected, and from anywhere over the tailnet.
 
 Tailscale itself runs on the docker host, not in a container. The resolver that makes this work is a
-container: [docker-compose.yaml](./docker-compose.yaml).
+container: [compose.yaml](./compose.yaml).
 
 ## The problem
 
@@ -174,7 +174,7 @@ Save the generated output to the path the compose file bind-mounts,
 
 docker compose \
   --env-file "./docker-volumes/env-files/common.env" \
-  --file "./services/dns/docker-compose.yaml" up --detach
+  --file "./services/dns/compose.yaml" up --detach
 ```
 
 If you would rather not run the script, [data/Corefile](./data/Corefile) is the same config as a

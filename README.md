@@ -29,7 +29,7 @@ service-name/
 │   ├── folder-1
 │   ├── folder-2
 │   └── ...
-└── docker-compose.yaml
+└── compose.yaml
 ```
 
 For multiple services that share the same docker-compose file, the following structure is used instead:
@@ -40,7 +40,7 @@ For multiple services that share the same docker-compose file, the following str
 │   └── data
 ├── service-2
 │   └── data
-└── docker-compose.yaml
+└── compose.yaml
 ```
 
 The data folder is used for any [bind mounts](https://docs.docker.com/storage/bind-mounts). (You can also use [named volumes](https://docs.docker.com/storage/volumes/) instead).
@@ -263,7 +263,7 @@ host; see the compose file header.
 
 > A modern server dashboard, running on the latest tech, designed with glassmorphism in mind. It is intended to be used for smaller VPS and private servers.
 
-- [docker-compose.yaml](./services/dashdot/docker-compose.yaml)
+- [compose.yaml](./services/dashdot/compose.yaml)
 - [Dashdot - GitHub](https://github.com/MauriceNino/dashdot)
 - [Dashdot - Documentation](https://getdashdot.com/docs/installation/docker-compose)
 
@@ -286,7 +286,7 @@ S3-compatible object storage, replacing MinIO. Generate `garage.toml` with
 [generate-garage-config.sh](./services/garage/generate-garage-config.sh) before the first start; it
 holds the RPC secret and admin token, so it is not kept in git.
 
-- [docker-compose.yaml](./services/garage/docker-compose.yaml)
+- [compose.yaml](./services/garage/compose.yaml)
 - [Garage - Quick Start](https://garagehq.deuxfleurs.fr/documentation/quick-start/)
 - [Garage - Real-world deployment](https://garagehq.deuxfleurs.fr/documentation/cookbook/real-world/)
 
@@ -294,7 +294,7 @@ holds the RPC secret and admin token, so it is not kept in git.
 
 > A simple, yet powerful dashboard for your server.
 
-- [docker-compose.yaml](./services/homarr/docker-compose.yaml)
+- [compose.yaml](./services/homarr/compose.yaml)
 - [Homarr - Installation Instructions](https://homarr.dev/docs/getting-started/installation/docker)
 
 ### Jenkins
@@ -346,7 +346,7 @@ Manga, comics and books stay bind mounts so the same trees remain reachable over
 Ships with the mongo-express web UI. The database itself publishes 27017 for LAN access, since
 Traefik only proxies HTTP.
 
-- [docker-compose.yaml](./services/mongo/docker-compose.yaml)
+- [compose.yaml](./services/mongo/compose.yaml)
 - [Mongo - Dockerhub](https://hub.docker.com/_/mongo)
 - [Mongo Express - Dockerhub](https://hub.docker.com/_/mongo-express)
 
@@ -381,7 +381,7 @@ Publishes 6379 for LAN access, since Traefik only proxies HTTP. `config/redis.co
 `scripts/docker-entrypoint-init.sh` have to be copied to `$BASE_VOLUME_DIRECTORY/redis/` on the host
 before the first start.
 
-- [docker-compose.yaml](./services/redis/docker-compose.yaml)
+- [compose.yaml](./services/redis/compose.yaml)
 - [Redis - Dockerhub](https://hub.docker.com/_/redis)
 - [Redis - ACL documentation](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/)
 
@@ -472,7 +472,7 @@ database and cannot be rolled back.
 
 ### Postgres and PgAdmin
 
-- [docker-compose.yaml](./services/postgres/docker-compose.yaml)
+- [compose.yaml](./services/postgres/compose.yaml)
 
 > PostgreSQL is a powerful, open source object-relational database system
 
@@ -527,7 +527,7 @@ information.
 
 > A process for automating Docker container base image updates.
 
-- [docker-compose.yaml](./services/watchtower/docker-compose.yaml)
+- [compose.yaml](./services/watchtower/compose.yaml)
 - [Watchtower - Dockerhub](https://hub.docker.com/r/nickfedor/watchtower)
 - [Documentation](https://watchtower.nickfedor.com/)
 - [GitHub](https://github.com/nicholas-fedor/watchtower) 
