@@ -47,9 +47,13 @@ has only `*.env.example`. Copy and fill them before validating, and never commit
   git. Older services instead commit a `🚨`-placeholder template filled in by hand on the host
   (see `docker-volumes/traefik/data/config.yml`).
 - No `version:` key. The template in README.md still shows `version: "3.9"`; it is stale.
-- Every service joins the external `proxy` network. That is how services reach each other, by
-  container name, as well as how Traefik reaches them. Do not put a service on its own isolated
-  network: databases are shared, and other stacks connect to them over `proxy`.
+- Anything other stacks consume joins the external `proxy` network. That is how services reach each
+  other, by container name, as well as how Traefik reaches them. Do not isolate a shared service:
+  `postgres`, `mongo` and `redis` are reached over `proxy` by things outside this repo.
+- Components bundled inside one stack are the exception, and stay on a private bridge network with
+  only the web-facing container bridging to `proxy`. `paperless` (db, broker, gotenberg, tika) and
+  `karakeep` (chrome, meilisearch) are built this way. The test is whether anything outside the stack
+  has a reason to reach it.
 - HTTP services publish no ports, since Traefik is the only ingress for them. A service speaking a
   non-HTTP protocol still joins `proxy`, carries no Traefik labels, and additionally publishes a port
   when it has to be reachable from the LAN: ftp, kafka, mongo, postgres, redis, plus traefik itself
