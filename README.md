@@ -301,8 +301,22 @@ holds the RPC secret and admin token, so it is not kept in git.
 
 > The leading open source automation server
 
-- [docker-compose.yaml](./docker-volumes/jenkins/docker-compose.yaml)
+Runs the official image directly rather than building a local one. Docker access comes from the
+mounted socket plus `group_add`, which needs `DOCKER_GID` set to the host's docker group id:
+
+```bash
+#!/usr/bin/env bash
+
+getent group docker | cut -d: -f3
+```
+
+Testcontainers talks to the Docker API over that socket and needs no CLI in the container. Pipeline
+steps that shell out to `docker`, including `docker.build()`, do need one, so run those on a build
+agent. Mounting the socket is equivalent to giving Jenkins root on the host.
+
+- [compose.yaml](./services/jenkins/compose.yaml)
 - [Jenkins - Dockerhub](https://hub.docker.com/r/jenkins/jenkins)
+- [Testcontainers - Docker environment](https://java.testcontainers.org/supported_docker_environment/)
 
 ### Kavita
 

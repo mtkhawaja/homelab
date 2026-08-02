@@ -1,0 +1,74 @@
+# Documentation Reference:
+# https://hub.docker.com/r/jenkins/jenkins
+# https://github.com/jenkinsci/docker/blob/master/README.md
+# https://java.testcontainers.org/supported_docker_environment/
+#
+# Also see:
+# https://github.com/mtkhawaja/posts/tree/main/containerizing-jenkins-dood-and-dind
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
+#   DOCKER_GID     - numeric gid of the host's `docker` group. Find it with:
+#                      getent group docker | cut -d: -f3
+#
+# This runs the official image directly. It previously built a local image whose
+# only purpose was installing the Docker CLI and adding the jenkins user to the
+# docker group, which meant every Jenkins upgrade was a rebuild and the image
+# drifted from upstream.
+#
+# Docker access now comes from the mounted socket plus group_add. Testcontainers
+# talks to the Docker API over that socket through docker-java, so it needs no
+# CLI binary in this container.
+#
+# What that does not cover: pipeline steps that shell out to `docker`, including
+# the Docker Pipeline plugin's docker.build(). There is no docker CLI in the
+# official image. Run those on a build agent that has one rather than on the
+# controller.
+#
+# Mounting the socket is equivalent to giving Jenkins root on the host. Any job
+# that can reach it can start a privileged container.
+services:
+  jenkins:
+    image: "jenkins/jenkins:lts-jdk21"
+    container_name: "jenkins"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    # The jenkins user is uid 1000 and is not in the host's docker group, so
+    # without this it cannot read the socket. This replaces the `usermod -aG
+    # docker jenkins` the removed Dockerfile performed.
+    group_add:
+      - "${DOCKER_GID:?required - numeric gid of the host docker group, from: getent group docker | cut -d: -f3}"
+    environment:
+      - TZ=America/New_York
+    volumes:
+      - "jenkins-data:/var/jenkins_home"
+      # Docker-outside-of-Docker. Testcontainers and any Docker-API client in a
+      # job use this.
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jenkins.entrypoints=http"
+      - "traefik.http.routers.jenkins.rule=Host(`jenkins.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.jenkins-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.jenkins.middlewares=jenkins-https-redirect"
+      - "traefik.http.routers.jenkins-secure.entrypoints=https"
+      - "traefik.http.routers.jenkins-secure.rule=Host(`jenkins.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.jenkins-secure.tls=true"
+      - "traefik.http.routers.jenkins-secure.service=jenkins"
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  jenkins-data:
+    # Pinned, so it resolves to `jenkins-data` rather than being namespaced to
+    # `jenkins_jenkins-data`. Leave it: the existing volume on the host carries
+    # the unprefixed name.
+    name: jenkins-data
