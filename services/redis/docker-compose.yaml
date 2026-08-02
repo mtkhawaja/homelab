@@ -1,0 +1,66 @@
+# Documentation Reference:
+# https://hub.docker.com/_/redis
+# https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/
+#
+# Standalone Redis. Unrelated to the Redis containers bundled with paperless
+# and twenty, which each run their own.
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Both are
+# guarded, so Compose refuses to start rather than running with a blank one.
+#
+#   BASE_VOLUME_DIRECTORY    - host path holding the two files mounted below
+#   REDIS_SUPERUSER_USERNAME - ACL user created on first start
+#   REDIS_SUPERUSER_PASSWORD - password for that user
+#
+# The entrypoint script previously logged "Skipping ACL setup" and carried on
+# when those two were unset, which left Redis reachable on the published port
+# with no ACL user and no password. They are required now so that cannot happen
+# silently.
+#
+# config/redis.conf and scripts/docker-entrypoint-init.sh are kept in this
+# directory for reference but mounted from $BASE_VOLUME_DIRECTORY, so copy them
+# to $BASE_VOLUME_DIRECTORY/redis/ on the host before the first start. Absolute
+# paths are required because a stack deployed through Portainer resolves
+# relative paths inside Portainer's own container.
+#
+# On the proxy network so other stacks can reach it as `redis`. It carries no
+# Traefik labels: Traefik only proxies HTTP, and Redis speaks RESP.
+services:
+  redis:
+    # Pinned to a major. A floating tag under Watchtower would eventually pull a
+    # new major across an RDB or AOF format change.
+    image: "redis:8"
+    container_name: "redis"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - TZ=America/New_York
+      - "REDIS_SUPERUSER_USERNAME=${REDIS_SUPERUSER_USERNAME:?required - ACL user created on first start}"
+      - "REDIS_SUPERUSER_PASSWORD=${REDIS_SUPERUSER_PASSWORD:?required - password for the ACL user}"
+    ports:
+      # Published deliberately. Traefik only proxies HTTP, so a datastore that
+      # has to be reachable from the LAN publishes instead.
+      - "6379:6379"
+    volumes:
+      - "redis-data:/data"
+      - "$BASE_VOLUME_DIRECTORY/redis/config/redis.conf:/usr/local/etc/redis/redis.conf:ro"
+      - "$BASE_VOLUME_DIRECTORY/redis/scripts/docker-entrypoint-init.sh:/docker-entrypoint-init.sh:ro"
+    # The script writes the ACL user into users.acl, then execs the command
+    # below. redis.conf points `aclfile` at that same path.
+    networks:
+      - "proxy"
+    entrypoint: ["/bin/bash", "/docker-entrypoint-init.sh"]
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+networks:
+  proxy:
+    external: true
+volumes:
+  redis-data:

@@ -1,0 +1,102 @@
+# Documentation Reference:
+# https://hub.docker.com/_/mongo
+# https://hub.docker.com/_/mongo-express
+#
+# MongoDB plus the mongo-express web UI.
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. The
+# credentials are guarded, so Compose refuses to start rather than running with
+# a blank one.
+#
+#   SERVICE_DOMAIN              - Traefik host rules, e.g. local.example.com
+#   MONGO_INITDB_ROOT_USERNAME  - MongoDB root username
+#   MONGO_INITDB_ROOT_PASSWORD  - password for the MongoDB root user
+#   MONGO_EXPRESS_USERNAME      - basic-auth username for the mongo-express UI
+#   MONGO_EXPRESS_PASSWORD      - basic-auth password for the mongo-express UI
+#
+# The four credentials were previously referenced but defined nowhere, so they
+# interpolated to empty. mongo-express additionally had basic auth switched off,
+# which left an unauthenticated database admin UI published through Traefik.
+#
+# MONGO_INITDB_ROOT_* only take effect while initialising an empty data
+# directory. If the mongo-data volume already exists and was created without a
+# root user, setting them here does not retroactively enable authentication.
+# Create the user once against the running container:
+#
+#   docker exec -it mongo mongosh
+#   use admin
+#   db.createUser({user: "<name>", pwd: "<password>",
+#                  roles: [{role: "root", db: "admin"}]})
+#
+# then restart so the image starts mongod with --auth.
+services:
+  mongo:
+    # Pinned to a major. A floating tag under Watchtower would eventually pull a
+    # new major across a storage format change.
+    image: "mongo:8"
+    container_name: "mongo"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    # On the proxy network so other stacks can reach it as `mongo`. It carries
+    # no Traefik labels: Traefik only proxies HTTP, and this speaks the MongoDB
+    # wire protocol.
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+      - "MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME:?required - MongoDB root username}"
+      - "MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD:?required - password for the MongoDB root user}"
+    ports:
+      # Published deliberately. Traefik only proxies HTTP, so a database that
+      # has to be reachable from the LAN publishes instead.
+      - "27017:27017"
+    volumes:
+      - "mongo-data:/data/db"
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ping: 1})' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  mongo-express:
+    image: "mongo-express:latest"
+    container_name: "mongo-express"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      - TZ=America/New_York
+      # Reuses the root credentials above rather than repeating them in a second
+      # pair of variables, which previously drifted apart.
+      - ME_CONFIG_MONGODB_SERVER=mongo
+      - "ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME:?required - MongoDB root username}"
+      - "ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD:?required - password for the MongoDB root user}"
+      # Both default to an empty string upstream, which disables authentication
+      # entirely. Required here so that cannot happen silently.
+      - "ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USERNAME:?required - basic-auth username for the mongo-express UI}"
+      - "ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD:?required - basic-auth password for the mongo-express UI}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mongo-express.entrypoints=http"
+      - "traefik.http.routers.mongo-express.rule=Host(`mongo-express.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.mongo-express-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.mongo-express.middlewares=mongo-express-https-redirect"
+      - "traefik.http.routers.mongo-express-secure.entrypoints=https"
+      - "traefik.http.routers.mongo-express-secure.rule=Host(`mongo-express.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.mongo-express-secure.tls=true"
+      - "traefik.http.routers.mongo-express-secure.service=mongo-express"
+      - "traefik.http.services.mongo-express.loadbalancer.server.port=8081"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  mongo-data:

@@ -1,0 +1,91 @@
+# Documentation Reference:
+# https://hub.docker.com/_/postgres
+# https://www.pgadmin.org/docs/pgadmin4/latest/container_deployment.html
+#
+# Standalone Postgres plus a pgAdmin web UI. Unrelated to the Postgres
+# containers bundled with vikunja and twenty, which each run their own.
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. The
+# credentials are guarded, so Compose refuses to start rather than running with
+# a blank one. docker-volumes/env-files/postgres.env.example is one convenient
+# place, not a requirement.
+#
+#   SERVICE_DOMAIN           - Traefik host rules, e.g. local.example.com
+#   POSTGRES_USER            - Postgres superuser name
+#   POSTGRES_PASSWORD        - password for POSTGRES_USER
+#   PGADMIN_DEFAULT_EMAIL    - login email for the pgAdmin UI
+#   PGADMIN_DEFAULT_PASSWORD - login password for the pgAdmin UI
+#
+# Postgres only applies POSTGRES_USER and POSTGRES_PASSWORD when initialising an
+# empty data directory. On an existing volume they must match what the role was
+# created with; rotate with ALTER ROLE rather than by editing the env file.
+services:
+  db:
+    # Pinned to a major. `postgres:latest` under Watchtower would eventually
+    # pull a new major, which refuses to start against an older data directory.
+    # This has to match the major that initialised the pg-data volume.
+    image: "postgres:18"
+    container_name: "postgres-database-server"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    # On the proxy network so other stacks can reach it as
+    # `postgres-database-server`. It carries no Traefik labels: Traefik only
+    # proxies HTTP, and this speaks the Postgres wire protocol.
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+      - "POSTGRES_USER=${POSTGRES_USER:?required - the Postgres superuser name}"
+      - "POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?required - password for POSTGRES_USER}"
+    ports:
+      # Published deliberately. Traefik only proxies HTTP, so a database that
+      # has to be reachable from the LAN publishes instead.
+      - "5432:5432"
+    volumes:
+      # postgres:18 declares its volume at /var/lib/postgresql, one level above
+      # PGDATA at /var/lib/postgresql/18/docker.
+      - "pg-data:/var/lib/postgresql"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  pgadmin:
+    image: "dpage/pgadmin4:latest"
+    container_name: "postgres-admin"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - TZ=America/New_York
+      - "PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:?required - login email for the pgAdmin UI}"
+      - "PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:?required - login password for the pgAdmin UI}"
+    volumes:
+      - "pg-admin-data:/var/lib/pgadmin"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pg-admin.entrypoints=http"
+      - "traefik.http.routers.pg-admin.rule=Host(`pg-admin.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.pg-admin-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.pg-admin.middlewares=pg-admin-https-redirect"
+      - "traefik.http.routers.pg-admin-secure.entrypoints=https"
+      - "traefik.http.routers.pg-admin-secure.rule=Host(`pg-admin.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.pg-admin-secure.tls=true"
+      - "traefik.http.routers.pg-admin-secure.service=pg-admin"
+      - "traefik.http.services.pg-admin.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  pg-data:
+  pg-admin-data:

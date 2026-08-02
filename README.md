@@ -281,6 +281,29 @@ holds the RPC secret and admin token, so it is not kept in git.
 - [docker-compose.yaml](./docker-volumes/jenkins/docker-compose.yaml)
 - [Jenkins - Dockerhub](https://hub.docker.com/r/jenkins/jenkins)
 
+### Mongo and Mongo Express
+
+> MongoDB is a source-available, cross-platform, document-oriented database program.
+
+Ships with the mongo-express web UI. The database itself publishes 27017 for LAN access, since
+Traefik only proxies HTTP.
+
+- [docker-compose.yaml](./services/mongo/docker-compose.yaml)
+- [Mongo - Dockerhub](https://hub.docker.com/_/mongo)
+- [Mongo Express - Dockerhub](https://hub.docker.com/_/mongo-express)
+
+### Redis
+
+> The open source, in-memory data store used by millions of developers as a cache, vector database, document database, streaming engine, and message broker.
+
+Publishes 6379 for LAN access, since Traefik only proxies HTTP. `config/redis.conf` and
+`scripts/docker-entrypoint-init.sh` have to be copied to `$BASE_VOLUME_DIRECTORY/redis/` on the host
+before the first start.
+
+- [docker-compose.yaml](./services/redis/docker-compose.yaml)
+- [Redis - Dockerhub](https://hub.docker.com/_/redis)
+- [Redis - ACL documentation](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/)
+
 ### PLG Stack (Prometheus-Loki-Grafana)
 
 - [docker-compose.yaml](./docker-volumes/plg/docker-compose.yaml)
@@ -354,7 +377,7 @@ sudo chown -R 65534:65534 $BASE_VOLUME_DIRECTORY/prometheus/data/
 
 ### Postgres and PgAdmin
 
-- [docker-compose.yaml](./docker-volumes/postgres/docker-compose.yaml)
+- [docker-compose.yaml](./services/postgres/docker-compose.yaml)
 
 > PostgreSQL is a powerful, open source object-relational database system
 

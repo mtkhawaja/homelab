@@ -47,10 +47,13 @@ has only `*.env.example`. Copy and fill them before validating, and never commit
   git. Older services instead commit a `🚨`-placeholder template filled in by hand on the host
   (see `docker-volumes/traefik/data/config.yml`).
 - No `version:` key. The template in README.md still shows `version: "3.9"`; it is stale.
-- HTTP services join the external `proxy` network and publish no ports. Traefik is the only ingress.
-  Anything speaking a non-HTTP protocol cannot route through it and publishes ports instead, or uses
-  host networking: currently ftp, kafka, mongo, postgres, redis, plus traefik itself, plex for client
-  discovery, and dns via `network_mode: host`.
+- Every service joins the external `proxy` network. That is how services reach each other, by
+  container name, as well as how Traefik reaches them. Do not put a service on its own isolated
+  network: databases are shared, and other stacks connect to them over `proxy`.
+- HTTP services publish no ports, since Traefik is the only ingress for them. A service speaking a
+  non-HTTP protocol still joins `proxy`, carries no Traefik labels, and additionally publishes a port
+  when it has to be reachable from the LAN: ftp, kafka, mongo, postgres, redis, plus traefik itself
+  and plex for client discovery. `dns` is the one exception, using `network_mode: host`.
 - Routing hostname is `<service>.$SERVICE_DOMAIN`. The `local.` prefix lives inside the value, so the
   label is `` Host(`<service>.$SERVICE_DOMAIN`) `` and never `<service>.local.$SERVICE_DOMAIN`. Copy
   the 11-label Traefik block from `services/dashdot/docker-compose.yaml`. `stirling-pdf` deviates
@@ -63,10 +66,18 @@ has only `*.env.example`. Copy and fill them before validating, and never commit
   the conversion as its own commit, since it orphans live data. Bind mounts use
   `$BASE_VOLUME_DIRECTORY/<service>/data/...` and often need a `chown` (grafana 472, prometheus
   65534, pgadmin 5050).
-- Document a service's env vars in its compose file: the header says what to set and how to generate
-  it, and `${VAR:?message}` makes Compose refuse to start rather than interpolate an empty string.
-  Add a `*.env.example` and an `env-files/README.md` row only for services carrying several secrets,
-  not for a single variable the compose file already explains.
+- **Compose files are self-contained and must not depend on a particular env file.** List every
+  variable a service needs in its own header, with a one-line description each, and guard each use
+  with `${VAR:?required - <what the variable is>}`. Compose then refuses to start rather than
+  interpolating an empty string, which is how `Host(`<service>.local.`)` shipped unnoticed. Guard
+  `SERVICE_DOMAIN` in the Traefik labels too, not just secrets.
+- The guard message says what the variable *is*, never where to put it. The value may come from
+  `common.env`, a second `--env-file`, the shell, or Portainer's stack variables, and that is the
+  deployer's choice. A `*.env.example` is an optional convenience, never something a compose file
+  asserts.
+- Quote any `environment:` entry containing a guard. A `: ` inside the message makes YAML parse the
+  list item as a map and Compose fails with `unexpected type map[string]interface {}`. Use `-`
+  rather than `:` in guard messages.
 - Prefer a header comment linking the upstream compose file the config was adapted from. Newer
   services do this; older ones mostly don't.
 
