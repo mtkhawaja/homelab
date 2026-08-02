@@ -272,6 +272,13 @@ host; see the compose file header.
 - [Registry - Dockerhub](https://hub.docker.com/_/registry)
 - [Registry - Deployment guide](https://distribution.github.io/distribution/about/deploying/)
 
+### Databasus
+
+> A self-hosted database management and visualisation tool.
+
+- [compose.yaml](./services/databasus/compose.yaml)
+- [Databasus - GitHub](https://github.com/databasus/databasus)
+
 ### Dashdot
 
 > A modern server dashboard, running on the latest tech, designed with glassmorphism in mind. It is intended to be used for smaller VPS and private servers.

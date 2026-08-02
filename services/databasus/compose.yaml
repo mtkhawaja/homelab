@@ -1,0 +1,49 @@
+# Documentation Reference:
+# https://github.com/databasus/databasus
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
+#
+# The routing hostname was built from $SELF_HOSTED_SERVER_URL, a variable that
+# also had to hold a full URL for the application itself. It cannot be both, and
+# it was defined nowhere either way. The host rule now uses $SERVICE_DOMAIN like
+# every other service, and the application variable is derived from it.
+services:
+  databasus:
+    image: "databasus/databasus:latest"
+    container_name: "databasus"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      SELF_HOSTED_SERVER_URL: "https://databasus.${SERVICE_DOMAIN:?required, see header}"
+    volumes:
+      - "databasus-data:/databasus-data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.databasus.entrypoints=http"
+      - "traefik.http.routers.databasus.rule=Host(`databasus.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.databasus-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.databasus.middlewares=databasus-https-redirect"
+      - "traefik.http.routers.databasus-secure.entrypoints=https"
+      - "traefik.http.routers.databasus-secure.rule=Host(`databasus.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.databasus-secure.tls=true"
+      - "traefik.http.routers.databasus-secure.service=databasus"
+      - "traefik.http.services.databasus.loadbalancer.server.port=4005"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  databasus-data:
+    # Pinned, so it resolves to `databasus-data` rather than being namespaced to
+    # `databasus_databasus-data`. Leave it: the existing volume on the host
+    # carries the unprefixed name. The service used to mount `databasus-data`
+    # while the only declared volume was `databasus_data`, so Compose rejected
+    # the file as an invalid project.
+    name: databasus-data
