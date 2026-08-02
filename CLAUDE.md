@@ -59,7 +59,9 @@ has only `*.env.example`. Copy and fill them before validating, and never commit
 - HTTP services publish no ports, since Traefik is the only ingress for them. A service speaking a
   non-HTTP protocol still joins `proxy`, carries no Traefik labels, and additionally publishes a port
   when it has to be reachable from the LAN: ftp, kafka, mongo, postgres, redis, plus traefik itself
-  and plex for client discovery. `dns` is the one exception, using `network_mode: host`.
+  and plex for client discovery. Two use `network_mode: host` instead: `dns`, and `beszel-agent`
+  because it reports the host's network interface throughput and on a bridge network would see only
+  its own veth pair. Host mode is for reading the host's own networking, not for convenience.
 - Routing hostname is `<service>.$SERVICE_DOMAIN`. The `local.` prefix lives inside the value, so the
   label is `` Host(`<service>.$SERVICE_DOMAIN`) `` and never `<service>.local.$SERVICE_DOMAIN`. Copy
   the 11-label Traefik block from `services/dashdot/compose.yaml`. `stirling-pdf` deviates

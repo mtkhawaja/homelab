@@ -240,6 +240,19 @@ services:
       - "com.centurylinklabs.watchtower.enable=false"
 ```
 
+### Beszel
+
+> Simple, lightweight server monitoring with Docker stats, historical data, and alerts.
+
+Two containers: the hub serving the web UI, and an agent collecting stats from the docker host. The
+hub reaches the agent over a unix socket in a shared volume, so the agent listens on no port. The
+agent needs the hub's public key, which only exists after the hub has run once, so the first deploy
+takes two passes; see the compose file header.
+
+- [compose.yaml](./services/beszel/compose.yaml)
+- [Beszel - Getting started](https://beszel.dev/guide/getting-started)
+- [Beszel - Agent installation](https://beszel.dev/guide/agent-installation)
+
 ### Calibre Web
 
 > Calibre-Web is a web app that offers a clean and intuitive interface for browsing, reading, and downloading eBooks using a valid Calibre database.

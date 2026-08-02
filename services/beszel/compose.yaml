@@ -1,0 +1,92 @@
+# Documentation Reference:
+# https://beszel.dev/guide/getting-started
+# https://beszel.dev/guide/environment-variables
+#
+# Adapted from:
+# https://beszel.dev/guide/agent-installation (unix socket example)
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
+#   BESZEL_KEY     - the hub's ED25519 public key, which the agent uses to
+#                    verify that the connecting hub is the real one
+#
+# BESZEL_KEY does not exist until the hub has run once, so the first deploy is
+# two steps:
+#
+#   1. Set BESZEL_KEY to any placeholder and start the stack. The hub comes up;
+#      the agent restarts in a loop, which is expected and harmless.
+#   2. Open the hub, create the admin user, and click "Add System". Copy the
+#      public key it shows into BESZEL_KEY and redeploy. For "Host / IP" enter
+#      /beszel_socket/beszel.sock and leave the port blank.
+#
+# An empty key would leave the agent accepting connections from any hub, which
+# is why it is guarded rather than defaulted.
+#
+# The hub reaches the agent over a unix socket in a shared volume rather than
+# over the network, so the agent listens on no TCP port at all. That is upstream's
+# recommendation when both run on the same host, and it is why the agent needs no
+# TOKEN or HUB_URL: those are for the WebSocket transport, where the agent dials
+# the hub instead. The hub publishes no port here, so an agent pointed at
+# localhost:8090 could not reach it anyway.
+services:
+  beszel:
+    image: "henrygd/beszel:latest"
+    container_name: "beszel"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      # Used for links in alert emails and webhooks, so it has to be the URL
+      # Traefik publishes rather than an internal address.
+      APP_URL: "https://beszel.${SERVICE_DOMAIN:?required, see header}"
+    volumes:
+      # Hub database, users and collected metrics. Nothing on the host reads it.
+      - "beszel-data:/beszel_data"
+      # Shared with the agent. Holds only the socket the agent listens on.
+      - "beszel-socket:/beszel_socket"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.beszel.entrypoints=http"
+      - "traefik.http.routers.beszel.rule=Host(`beszel.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.beszel-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.beszel.middlewares=beszel-https-redirect"
+      - "traefik.http.routers.beszel-secure.entrypoints=https"
+      - "traefik.http.routers.beszel-secure.rule=Host(`beszel.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.beszel-secure.tls=true"
+      - "traefik.http.routers.beszel-secure.service=beszel"
+      - "traefik.http.services.beszel.loadbalancer.server.port=8090"
+      - "traefik.docker.network=proxy"
+
+  beszel-agent:
+    image: "henrygd/beszel-agent:latest"
+    container_name: "beszel-agent"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    # The agent reports the host's network interface throughput, and on a bridge
+    # network it would see only its own veth pair and report nothing useful. It
+    # still listens on the unix socket below rather than a port, so host mode
+    # exposes nothing to the LAN. `dns` is the only other service that does this.
+    network_mode: "host"
+    environment:
+      LISTEN: "/beszel_socket/beszel.sock"
+      KEY: "${BESZEL_KEY:?required - the hub's public key, shown under Add System in the hub UI}"
+    volumes:
+      # Agent state, including the fingerprint that identifies this system.
+      - "beszel-agent-data:/var/lib/beszel-agent"
+      - "beszel-socket:/beszel_socket"
+      # Container CPU, memory and network stats. Read-only: the agent only ever
+      # queries the Docker API, and a writable socket would be root on the host.
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+networks:
+  proxy:
+    external: true
+volumes:
+  beszel-data:
+  beszel-agent-data:
+  beszel-socket:
