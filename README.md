@@ -119,7 +119,7 @@ sudo systemctl stop systemd-resolved.service
 
 #### Start the Service
 
-Start the [pi-hole service](./docker-volumes/pi-hole) as follows:
+Start the [pi-hole service](./services/pi-hole) as follows:
 
 ```bash
 #!/usr/bin/env bash
@@ -127,7 +127,7 @@ Start the [pi-hole service](./docker-volumes/pi-hole) as follows:
 docker compose \
   --env-file "./docker-volumes/env-files/common.env" \
   --env-file "./docker-volumes/env-files/pi-hole.env" \
-  --file "./docker-volumes/pi-hole/docker-compose.yaml" up --detach
+  --file "./services/pi-hole/compose.yaml" up --detach
 ```
 
 The web UI will be accessible via the following URL: [http://${DOCKER_HOST_IP}/admin](http://localhost/admin)
@@ -552,7 +552,10 @@ database and cannot be rolled back.
 
 > Network-wide Ad Blocking
 
-- [docker-compose.yaml](./docker-volumes/pi-hole/docker-compose.yaml)
+Answers DNS for the whole LAN on port 53, which Traefik cannot proxy, so its ports are published.
+Excluded from Watchtower: v6 was a breaking release and upgrades here should be deliberate.
+
+- [compose.yaml](./services/pi-hole/compose.yaml)
 - [Pi Hole Docker Quick Start](https://github.com/pi-hole/docker-pi-hole/#quick-start)
 - [Documentation](https://docs.pi-hole.net/)
 - [Firebox Ad Lists](https://firebog.net/)

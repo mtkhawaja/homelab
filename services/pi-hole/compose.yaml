@@ -1,0 +1,69 @@
+# Documentation Reference:
+# https://github.com/pi-hole/docker-pi-hole
+# https://docs.pi-hole.net/docker/
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN           - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY    - host path holding the pi-hole config directories
+#   PI_HOLE_WEB_UI_PASSWORD  - admin password for the web interface
+#
+# The password was passed as WEBPASSWORD, which Pi-hole v6 no longer reads. The
+# image tracks latest, so this has been on v6 since that release: the variable
+# was ignored and Pi-hole generated a random password on each fresh start,
+# recoverable only from the container logs or by running `pihole setpassword`.
+# v6 takes it as FTLCONF_webserver_api_password.
+#
+# Pi-hole answers DNS on 53 for the whole LAN, which Traefik cannot proxy, so
+# the ports are published. The web UI is additionally routed through Traefik.
+services:
+  pihole:
+    image: "pihole/pihole:latest"
+    container_name: "pi-hole"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      # Only needed when Pi-hole is also the DHCP server.
+      - "67:67/udp"
+      # The web UI, published as well as routed, so it stays reachable if
+      # Traefik or DNS is the thing that is broken.
+      - "8070:80/tcp"
+    environment:
+      FTLCONF_webserver_api_password: "${PI_HOLE_WEB_UI_PASSWORD:?required - admin password for the Pi-hole web interface}"
+      TZ: "America/New_York"
+    volumes:
+      # Host clock, so query log timestamps match the host.
+      - "/etc/localtime:/etc/localtime:ro"
+      # Pi-hole's own configuration and databases, including gravity.db.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding the pi-hole config directories}/pi-hole/data/etc-pi-hole:/etc/pihole"
+      # Hand-written dnsmasq config. v6 folds most of this into pihole.toml and
+      # the directory is optional for a fresh install, but it is kept because
+      # anything already written there by hand is still read.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding the pi-hole config directories}/pi-hole/data/etc-dnsmasq.d:/etc/dnsmasq.d"
+    cap_add:
+      # Only needed when Pi-hole is also the DHCP server.
+      - "NET_ADMIN"
+    labels:
+      # v6 was a breaking release. Upgrades here are deliberate, not automatic.
+      - "com.centurylinklabs.watchtower.enable=false"
+      - "traefik.enable=true"
+      - "traefik.http.routers.pi-hole.entrypoints=http"
+      - "traefik.http.routers.pi-hole.rule=Host(`pi-hole.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.pi-hole-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.pi-hole.middlewares=pi-hole-https-redirect"
+      - "traefik.http.routers.pi-hole-secure.entrypoints=https"
+      - "traefik.http.routers.pi-hole-secure.rule=Host(`pi-hole.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.pi-hole-secure.tls=true"
+      - "traefik.http.routers.pi-hole-secure.service=pi-hole"
+      - "traefik.http.services.pi-hole.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
