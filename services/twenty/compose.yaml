@@ -1,0 +1,154 @@
+# Documentation Reference:
+# https://twenty.com/developers/section/self-hosting/docker-compose
+#
+# Adapted from:
+# https://github.com/twentyhq/twenty/blob/main/packages/twenty-docker/docker-compose.yml
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN     - Traefik host rules, e.g. local.example.com
+#   TWENTY_APP_SECRET  - signs sessions and tokens. Generate with:
+#                          openssl rand -base64 32
+#   TWENTY_DB_USER     - Postgres role owning the twenty database
+#   TWENTY_DB_PASSWORD - password for that role
+#
+# APP_SECRET previously defaulted to the literal string
+# replace_me_with_a_random_string, so unless someone had set it, sessions were
+# signed with a secret published in upstream's compose file. Rotating it logs
+# everyone out.
+#
+# The database credentials were PG_DATABASE_USER and PG_DATABASE_PASSWORD,
+# defaulting to postgres/postgres. Vikunja used the same two names, so setting
+# them for one stack silently changed the other. On an existing deployment set
+# these to what the database was actually initialised with, which is
+# postgres/postgres unless PG_DATABASE_USER was set. Postgres ignores them once
+# the data directory exists, so a mismatch shows up as a failed login.
+#
+# Only `server` joins proxy. worker, db and redis are private to this stack.
+name: twenty
+services:
+  server:
+    image: "twentycrm/twenty:${TWENTY_VERSION:-latest}"
+    container_name: "twenty"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "crm-internal"
+      - "proxy"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_PORT: 3000
+      PG_DATABASE_URL: "postgres://${TWENTY_DB_USER:?required - Postgres role owning the twenty database}:${TWENTY_DB_PASSWORD:?required - password for TWENTY_DB_USER}@db:5432/default"
+      REDIS_URL: "redis://redis:6379"
+      # Has to match the URL Traefik publishes, or invitation and password reset
+      # links point somewhere unreachable.
+      SERVER_URL: "https://twenty.${SERVICE_DOMAIN:?required, see header}"
+      APP_SECRET: "${TWENTY_APP_SECRET:?required - generate with openssl rand -base64 32}"
+      # Attachments and workspace uploads land on the volume below.
+      STORAGE_TYPE: "local"
+    volumes:
+      - "server-local-data:/app/packages/twenty-server/.local-storage"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:3000/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.twenty.entrypoints=http"
+      - "traefik.http.routers.twenty.rule=Host(`twenty.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.twenty-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.twenty.middlewares=twenty-https-redirect"
+      - "traefik.http.routers.twenty-secure.entrypoints=https"
+      - "traefik.http.routers.twenty-secure.rule=Host(`twenty.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.twenty-secure.tls=true"
+      - "traefik.http.routers.twenty-secure.service=twenty"
+      - "traefik.http.services.twenty.loadbalancer.server.port=3000"
+      - "traefik.docker.network=proxy"
+
+  worker:
+    image: "twentycrm/twenty:${TWENTY_VERSION:-latest}"
+    container_name: "twenty-worker"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "crm-internal"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["yarn", "worker:prod"]
+    environment:
+      PG_DATABASE_URL: "postgres://${TWENTY_DB_USER:?required - Postgres role owning the twenty database}:${TWENTY_DB_PASSWORD:?required - password for TWENTY_DB_USER}@db:5432/default"
+      REDIS_URL: "redis://redis:6379"
+      SERVER_URL: "https://twenty.${SERVICE_DOMAIN:?required, see header}"
+      APP_SECRET: "${TWENTY_APP_SECRET:?required - generate with openssl rand -base64 32}"
+      STORAGE_TYPE: "local"
+      # The server already does both on startup.
+      DISABLE_DB_MIGRATIONS: "true"
+      DISABLE_CRON_JOBS_REGISTRATION: "true"
+    volumes:
+      - "server-local-data:/app/packages/twenty-server/.local-storage"
+
+  db:
+    image: "postgres:18"
+    container_name: "twenty-db"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "crm-internal"
+    environment:
+      POSTGRES_DB: "default"
+      POSTGRES_USER: "${TWENTY_DB_USER:?required - Postgres role owning the twenty database}"
+      POSTGRES_PASSWORD: "${TWENTY_DB_PASSWORD:?required - password for TWENTY_DB_USER}"
+    volumes:
+      # postgres:18 declares its volume at /var/lib/postgresql, one level above
+      # PGDATA at /var/lib/postgresql/18/docker.
+      - "db-data:/var/lib/postgresql"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U $$POSTGRES_USER -d default"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: "redis:8"
+    container_name: "twenty-redis"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "crm-internal"
+    # Twenty runs its background jobs through Redis, so evicting keys under
+    # memory pressure would silently drop queued work.
+    command: ["--maxmemory-policy", "noeviction"]
+    volumes:
+      # New. Redis had no volume, so every restart dropped the job queue.
+      # Nothing is orphaned by adding it: there was no host data to begin with.
+      - "redis-data:/data"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+networks:
+  proxy:
+    external: true
+  crm-internal:
+    driver: bridge
+volumes:
+  db-data:
+  server-local-data:
+  redis-data:

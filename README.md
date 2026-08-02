@@ -548,6 +548,18 @@ information.
 - [docker-compose.yaml](./docker-volumes/traefik/docker-compose.yaml)
 - [Traefik - Dockerhub](https://hub.docker.com/_/traefik)
 
+### Twenty CRM
+
+> A modern CRM offering a powerful, customizable platform, built to be the open-source alternative to Salesforce.
+
+Four containers: the server, a background worker, Postgres and Redis. Only the server is routed;
+the rest are private to the stack. `TWENTY_APP_SECRET` signs sessions, so rotating it logs everyone
+out.
+
+- [compose.yaml](./services/twenty/compose.yaml)
+- [Twenty - Self-hosting with Docker Compose](https://twenty.com/developers/section/self-hosting/docker-compose)
+- [Twenty - GitHub](https://github.com/twentyhq/twenty)
+
 ### Watchtower
 
 > A process for automating Docker container base image updates.
