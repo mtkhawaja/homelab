@@ -76,18 +76,6 @@ docker network create proxy
 All services will belong to this network and traefik will route traffic to the appropriate service.
 As such, typically, we will **not** be [publishing ports](https://docs.docker.com/network/#published-ports) for our services except for traefik and pi-hole.
 
-### Plex
-
-> Plex organises all of your personal media so you can enjoy it no matter where you are.
-
-Publishes its own ports as well as sitting behind Traefik: clients on the LAN discover the server by
-broadcasting on 1900/udp and the 32410-32414/udp range, which Traefik cannot proxy. Media stays on
-bind mounts so it remains reachable over Samba and FTP.
-
-- [compose.yaml](./services/plex/compose.yaml)
-- [Plex - Docker images](https://github.com/plexinc/pms-docker)
-- [Plex - Installation](https://support.plex.tv/articles/200288586-installation/)
-
 ### Pi-Hole
 
 #### Ubuntu Specific Configuration
@@ -142,7 +130,7 @@ You can follow the instructions provided by ASUS for [configuring a custom DNS s
 
 ### Traefik
 
-Start the [traefik service](./docker-volumes/traefik/docker-compose.yaml) as follows:
+Start the [traefik service](./services/traefik/compose.yaml) as follows:
 
 ```shell
 #!/usr/bin/env bash
@@ -150,7 +138,7 @@ Start the [traefik service](./docker-volumes/traefik/docker-compose.yaml) as fol
 docker compose \
   --env-file "./docker-volumes/env-files/common.env" \
   --env-file "./docker-volumes/env-files/traefik.env" \
-  --file "./docker-volumes/traefik/docker-compose.yaml" up --detach
+  --file "./services/traefik/compose.yaml" up --detach
 ```
 
 ### Portainer
@@ -548,6 +536,18 @@ database and cannot be rolled back.
 - [compose.yaml](./services/nexus/compose.yaml)
 - [Nexus Repository Manager - Dockerhub](https://hub.docker.com/r/sonatype/nexus3)
 
+### Plex
+
+> Plex organises all of your personal media so you can enjoy it no matter where you are.
+
+Publishes its own ports as well as sitting behind Traefik: clients on the LAN discover the server by
+broadcasting on 1900/udp and the 32410-32414/udp range, which Traefik cannot proxy. Media stays on
+bind mounts so it remains reachable over Samba and FTP.
+
+- [compose.yaml](./services/plex/compose.yaml)
+- [Plex - Docker images](https://github.com/plexinc/pms-docker)
+- [Plex - Installation](https://support.plex.tv/articles/200288586-installation/)
+
 ### Pi-Hole
 
 > Network-wide Ad Blocking
@@ -617,7 +617,7 @@ information.
 
 > Traefik is the leading open-source reverse proxy and load balancer for HTTP and TCP-based applications that is easy, dynamic and full-featured.
 
-- [docker-compose.yaml](./docker-volumes/traefik/docker-compose.yaml)
+- [compose.yaml](./services/traefik/compose.yaml)
 - [Traefik - Dockerhub](https://hub.docker.com/_/traefik)
 
 ### Twenty CRM

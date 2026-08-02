@@ -117,7 +117,7 @@ Traefik matches "requests targeted to a given host", and "if no host is set in t
 these matchers look at the Host header instead" [[12]](#sources). Either way it is the name being
 matched, not the address the packet arrived on, so the same router matches on both paths. The wildcard certificate is issued via the Cloudflare DNS-01 challenge
 (`certificatesResolvers.cloudflare.acme.dnsChallenge` in
-[traefik.yml](../../docker-volumes/traefik/data/traefik.yml)). DNS-01 proves control "by putting a
+[traefik.yml](../traefik/data/traefik.yml)). DNS-01 proves control "by putting a
 specific value in a TXT record under that domain name", which works "even if you have multiple web
 servers" and can "validate domain names whose webservers aren't exposed to the public internet"
 [[13]](#sources). It is also the challenge type that "allows you to issue wildcard certificates"

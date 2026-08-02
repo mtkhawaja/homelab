@@ -1,0 +1,96 @@
+# Documentation Reference:
+# https://doc.traefik.io/traefik/
+# https://doc.traefik.io/traefik/https/acme/#dnschallenge
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN        - the domain everything is published under,
+#                           e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY - host path holding traefik's config and acme.json
+#   CF_API_EMAIL          - Cloudflare account email, for the ACME DNS challenge
+#   CF_DNS_API_TOKEN      - Cloudflare API token with DNS edit rights on the zone
+#   TRAEFIK_BASIC_AUTH    - htpasswd line guarding the dashboard. Generate with:
+#                             htpasswd -nbB <user> <password>
+#
+# The certificate is a wildcard obtained over the Cloudflare DNS challenge, so
+# nothing has to be reachable from the internet for issuance. The domains were
+# written as local.$LOCAL_DOMAIN_NAME with sans *.local.$LOCAL_DOMAIN_NAME, and
+# that variable no longer exists, so both rendered as `local.` and `*.local.`.
+# They are now $SERVICE_DOMAIN and *.$SERVICE_DOMAIN, which already carries the
+# local. prefix in its value.
+#
+# TRAEFIK_BASIC_AUTH was also undefined, leaving the dashboard's basicauth
+# middleware with an empty user list.
+#
+# Watch the dollars in that value. A bcrypt hash is full of them, and Compose
+# interpolates $-sequences inside values it reads from an --env-file, so
+# admin:$2y$05$abcdefghij silently becomes admin:$2y$05 - the last segment looks
+# like a variable name and is substituted away. Double every dollar in the env
+# file:
+#
+#   TRAEFIK_BASIC_AUTH=admin:$$2y$$05$$abcdefghij
+#
+# Exporting it in the shell instead needs no escaping. Either way, verify with
+# `docker compose ... config` that the rendered hash still ends where it should.
+#
+# Before starting the first time, create acme.json on the host with 0600
+# permissions or Traefik refuses to use it:
+#
+#   install -m 600 /dev/null $BASE_VOLUME_DIRECTORY/traefik/data/acme.json
+#
+# traefik.yml and config.yml under ./data are templates carrying 🚨 placeholders.
+# Fill them in on the host at $BASE_VOLUME_DIRECTORY/traefik/data/ rather than in
+# git, since they hold the real domain, email and internal IPs.
+services:
+  traefik:
+    image: "traefik:latest"
+    container_name: "traefik"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Read by the ACME DNS challenge provider, not by Traefik itself.
+      - "CF_API_EMAIL=${CF_API_EMAIL:?required - Cloudflare account email for the ACME DNS challenge}"
+      - "CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN:?required - Cloudflare API token with DNS edit rights on the zone}"
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      # Read-only. Traefik only needs to watch container labels.
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      # Static configuration. A change here needs a restart.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding traefik's config and acme.json}/traefik/data/traefik.yml:/traefik.yml:ro"
+      # Issued certificates and the ACME account key. The only writable mount,
+      # and the one thing here that is painful to lose: wiping it means
+      # re-issuing against Let's Encrypt rate limits.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding traefik's config and acme.json}/traefik/data/acme.json:/acme.json"
+      # Dynamic configuration for things that are not containers, such as the
+      # router and the host's own services. Reloaded without a restart.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding traefik's config and acme.json}/traefik/data/config.yml:/config.yml:ro"
+    labels:
+      - "traefik.enable=true"
+      # Middleware
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_BASIC_AUTH:?required - htpasswd line guarding the dashboard, from htpasswd -nbB}"
+      - "traefik.http.middlewares.traefik-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https"
+      # Routers
+      - "traefik.http.routers.traefik.entrypoints=http"
+      - "traefik.http.routers.traefik.rule=Host(`traefik-dashboard.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.traefik.middlewares=traefik-https-redirect"
+      - "traefik.http.routers.traefik-secure.entrypoints=https"
+      - "traefik.http.routers.traefik-secure.rule=Host(`traefik-dashboard.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.traefik-secure.middlewares=traefik-auth"
+      - "traefik.http.routers.traefik-secure.tls=true"
+      - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.traefik-secure.service=api@internal"
+      # Wildcard certificate covering every service on the domain.
+      - "traefik.http.routers.traefik-secure.tls.domains[0].main=${SERVICE_DOMAIN:?required, see header}"
+      - "traefik.http.routers.traefik-secure.tls.domains[0].sans=*.${SERVICE_DOMAIN:?required, see header}"
+networks:
+  proxy:
+    external: true

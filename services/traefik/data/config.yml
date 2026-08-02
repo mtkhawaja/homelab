@@ -65,15 +65,20 @@ http:
         customRequestHeaders:
           X-Forwarded-Proto: https
 
-    default-whitelist:
-      ipWhiteList:
+    # v3 renamed ipWhiteList to ipAllowList and left the configuration alone.
+    # Under the old name the middleware fails to build.
+    default-allowlist:
+      ipAllowList:
         sourceRange:
           - "10.0.0.0/8"
           - "192.168.0.0/16"
           - "172.16.0.0/12"
+          # Tailscale hands out addresses from the CGNAT range, so without this
+          # a tailnet client is not on any of the ranges above and is refused.
+          - "100.64.0.0/10"
 
     secured:
       chain:
         middlewares:
-          - default-whitelist
+          - default-allowlist
           - default-headers
