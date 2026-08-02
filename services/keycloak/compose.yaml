@@ -1,0 +1,109 @@
+# Documentation Reference:
+# https://www.keycloak.org/server/containers
+# https://www.keycloak.org/server/reverseproxy
+# https://www.keycloak.org/server/all-config
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN            - Traefik host rules, e.g. local.example.com
+#   KEYCLOAK_ADMIN_USER       - bootstrap admin username
+#   KEYCLOAK_ADMIN_PASSWORD   - bootstrap admin password
+#   KEYCLOAK_DB_USER          - Postgres role owning the keycloak database
+#   KEYCLOAK_DB_PASSWORD      - password for that role
+#
+# The bootstrap admin only takes effect on the very first start, while no admin
+# account exists yet. After that Keycloak ignores both variables, and the
+# password has to be changed from inside the admin console. Leaving them set is
+# harmless; changing them later does nothing.
+#
+# This runs `start`, which is production mode, rather than start-dev. Upstream
+# suggests baking an optimised image with a Containerfile, but that means a
+# rebuild on every Keycloak upgrade and a local image drifting from upstream, so
+# the build step runs at container start instead. The cost is a slower boot, on
+# the order of tens of seconds.
+#
+# Only `keycloak` joins proxy. The database is private to this stack.
+services:
+  keycloak:
+    # Pinned rather than latest: Keycloak migrates its database on start and the
+    # migrations are one-way, so an unattended Watchtower jump across a major
+    # version is not something to leave to chance.
+    image: "quay.io/keycloak/keycloak:26.7.0"
+    container_name: "keycloak"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "keycloak-internal"
+      - "proxy"
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    command: ["start"]
+    environment:
+      KC_DB: "postgres"
+      KC_DB_URL: "jdbc:postgresql://keycloak-db:5432/keycloak"
+      KC_DB_USERNAME: "${KEYCLOAK_DB_USER:?required - Postgres role owning the keycloak database}"
+      KC_DB_PASSWORD: "${KEYCLOAK_DB_PASSWORD:?required - password for KEYCLOAK_DB_USER}"
+      # Keycloak puts absolute URLs in tokens, redirects and its OIDC discovery
+      # document, so this has to be the URL Traefik publishes rather than an
+      # internal address.
+      KC_HOSTNAME: "https://keycloak.${SERVICE_DOMAIN:?required, see header}"
+      # Traefik terminates TLS and speaks plain HTTP to this container, which
+      # production mode refuses by default.
+      KC_HTTP_ENABLED: "true"
+      # Traefik sends X-Forwarded-*, not the RFC 7239 Forwarded header. Getting
+      # this wrong means Keycloak builds redirects from the internal address.
+      KC_PROXY_HEADERS: "xforwarded"
+      # /health/ready and friends, on the management port 9000. Not published,
+      # so only reachable from the proxy network.
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: "${KEYCLOAK_ADMIN_USER:?required - bootstrap admin username, first start only}"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "${KEYCLOAK_ADMIN_PASSWORD:?required - bootstrap admin password, first start only}"
+    # No volume. With an external database Keycloak keeps nothing it needs to
+    # survive a restart on local disk. Custom themes or providers would be bind
+    # mounts under /opt/keycloak/themes and /opt/keycloak/providers.
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.keycloak.entrypoints=http"
+      - "traefik.http.routers.keycloak.rule=Host(`keycloak.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.keycloak-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.keycloak.middlewares=keycloak-https-redirect"
+      - "traefik.http.routers.keycloak-secure.entrypoints=https"
+      - "traefik.http.routers.keycloak-secure.rule=Host(`keycloak.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.keycloak-secure.tls=true"
+      - "traefik.http.routers.keycloak-secure.service=keycloak"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+      - "traefik.docker.network=proxy"
+
+  keycloak-db:
+    image: "postgres:18"
+    container_name: "keycloak-db"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "keycloak-internal"
+    environment:
+      POSTGRES_DB: "keycloak"
+      POSTGRES_USER: "${KEYCLOAK_DB_USER:?required - Postgres role owning the keycloak database}"
+      POSTGRES_PASSWORD: "${KEYCLOAK_DB_PASSWORD:?required - password for KEYCLOAK_DB_USER}"
+    volumes:
+      # postgres:18 declares its volume at /var/lib/postgresql, one level above
+      # PGDATA at /var/lib/postgresql/18/docker.
+      - "db-data:/var/lib/postgresql"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U $$POSTGRES_USER -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+networks:
+  proxy:
+    external: true
+  keycloak-internal:
+    driver: bridge
+volumes:
+  db-data:

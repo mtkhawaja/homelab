@@ -374,6 +374,19 @@ rotating the former logs everyone out.
 - [compose.yaml](./services/karakeep/compose.yaml)
 - [Karakeep - Docker installation](https://docs.karakeep.app/Installation/docker)
 
+### Keycloak
+
+> Open source identity and access management for modern applications and services.
+
+Keycloak plus its own Postgres. Runs in production mode (`start`) rather than `start-dev`, with the
+build step at container start so no local image has to be maintained. Traefik terminates TLS, so
+`KC_HTTP_ENABLED` is on and `KC_PROXY_HEADERS` is `xforwarded`. The bootstrap admin credentials only
+apply on the first start, before an admin account exists.
+
+- [compose.yaml](./services/keycloak/compose.yaml)
+- [Keycloak - Running in a container](https://www.keycloak.org/server/containers)
+- [Keycloak - Reverse proxy configuration](https://www.keycloak.org/server/reverseproxy)
+
 ### Kavita
 
 > Kavita is a fast, feature rich, cross platform reading server.
