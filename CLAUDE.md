@@ -14,8 +14,7 @@ docker compose \
   --file "./services/<service>/compose.yaml" up --detach
 ```
 
-Reworked services live under `services/`; the ones still awaiting a pass are under
-`docker-volumes/`. Substitute whichever directory holds the service.
+Every service lives under `services/`. `docker-volumes/` now holds only `env-files/`.
 
 Add a second `--env-file` for services with their own (pi-hole, traefik, postgres, sonarqube).
 
@@ -33,12 +32,10 @@ has only `*.env.example`. Copy and fill them before validating, and never commit
 
 ## Conventions
 
-- New and cleaned-up services live under `services/<name>/`. Legacy ones are still under
-  `docker-volumes/<name>/` and move to `services/` as they are reworked, so expect both during the
-  migration. File is named `compose.yaml`, the name the Compose Spec defines and Docker looks for
-  first; `docker-compose.yaml` is the legacy fallback. Everything under `services/` uses the new
-  name. Services still under `docker-volumes/` use the old one and get renamed as part of their
-  rework, so glob both when scripting until the migration finishes.
+- Services live under `services/<name>/`, one directory each, and the file is always named
+  `compose.yaml` — the name the Compose Spec defines and Docker looks for first.
+  `docker-compose.yaml` is the legacy fallback and no longer appears in this repo, so there is
+  nothing left to glob for. `docker-volumes/` holds only `env-files/`; nothing else belongs there.
 - Moving a service dir does not move its host data. Bind mounts are rooted at
   `$BASE_VOLUME_DIRECTORY`, which is a host path independent of the repo layout.
 - Bind mounts must use absolute host paths, not relative ones. Relative paths resolve against the
@@ -46,8 +43,9 @@ has only `*.env.example`. Copy and fill them before validating, and never commit
   there, so they silently point at the wrong place.
 - Config needing host-specific values is generated to stdout by a standalone script and saved under
   `$BASE_VOLUME_DIRECTORY` (see `services/dns/generate-dns-config.sh`), keeping real domains out of
-  git. Older services instead commit a `🚨`-placeholder template filled in by hand on the host
-  (see `docker-volumes/traefik/data/config.yml`).
+  git. Traefik instead commits a `🚨`-placeholder template filled in by hand on the host
+  (see `services/traefik/data/config.yml`); either shape is fine, but the real values never land in
+  git.
 - No `version:` key. The template in README.md still shows `version: "3.9"`; it is stale.
 - Anything other stacks consume joins the external `proxy` network. That is how services reach each
   other, by container name, as well as how Traefik reaches them. Do not isolate a shared service:
@@ -64,11 +62,12 @@ has only `*.env.example`. Copy and fill them before validating, and never commit
   its own veth pair. Host mode is for reading the host's own networking, not for convenience.
 - Routing hostname is `<service>.$SERVICE_DOMAIN`. The `local.` prefix lives inside the value, so the
   label is `` Host(`<service>.$SERVICE_DOMAIN`) `` and never `<service>.local.$SERVICE_DOMAIN`. Copy
-  the 11-label Traefik block from `services/dashdot/compose.yaml`. `stirling-pdf` deviates
-  with `$SELF_HOSTED_SERVER_URL`; do not copy that one.
-- Most services under `docker-volumes/` still reference the removed `$LOCAL_DOMAIN_NAME` and render
-  `` Host(`<service>.local.`) `` rather than failing. Fix it in the service being worked on, not
-  across the repo.
+  the 11-label Traefik block from `services/dashdot/compose.yaml`. Every service now uses
+  `$SERVICE_DOMAIN`; there are no remaining deviations to copy by accident.
+- `$LOCAL_DOMAIN_NAME` is gone from the repo. It was removed from the env files long before the
+  services stopped referencing it, and because Compose interpolates a missing variable to an empty
+  string, every one of them rendered `` Host(`<service>.local.`) `` and silently stopped routing
+  instead of failing. That is what the `${VAR:?}` guards below exist to prevent.
 - Prefer named volumes over bind mounts, on existing services as well as new ones. A bind mount has
   to justify itself with a named host consumer. Re-evaluate every one during a migration, but land
   the conversion as its own commit, since it orphans live data. Bind mounts use

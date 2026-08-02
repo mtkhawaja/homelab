@@ -1,6 +1,6 @@
 ---
 name: add-service
-description: Use when adding a new service to this homelab repo, or when moving an existing service from docker-volumes/ to services/.
+description: Use when adding a new service to this homelab repo, or reworking an existing one under services/.
 ---
 
 # Adding or migrating a homelab service
@@ -51,16 +51,19 @@ file header where whoever deploys will see it.
 ## The project name is the directory name
 
 Compose derives the project name from the containing directory and namespaces volumes and networks
-with it. `docker-volumes/vikunja/` to `services/vikunja/` keeps the name `vikunja`, so
-`vikunja_db-data` still resolves. **Renaming the directory orphans every named volume.**
+with it, so `services/vikunja/` gives `vikunja_db-data`. **Renaming the directory orphans every named
+volume.**
 
-Verify on every move rather than assuming. Render the old file and the new one, and diff the
+Verify on any move or rename rather than assuming. Render the old file and the new one, and diff the
 resolved `volumes:` and `networks:` blocks. They must match.
 
 ```bash
-git show HEAD:docker-volumes/<name>/docker-compose.yaml > /tmp/before.yaml
-# then `docker compose ... config` (see CLAUDE.md) against /tmp/before.yaml and the new path
+git show HEAD:<old-path> > "$SCRATCH/before.yaml"
+docker compose --project-name <old-dir-name> --file "$SCRATCH/before.yaml" config
 ```
+
+Pass `--project-name` explicitly. Compose would otherwise name the project after whatever directory
+you parked the copy in, and the comparison silently comes out wrong.
 
 If the directory name has to change, pin the old one with a top-level `name:` key, and say so in a
 comment on the volume key.
@@ -72,14 +75,11 @@ comment on the volume key.
 3. Validate with `docker compose config` (command in CLAUDE.md). Read the render, do not just check
    the exit code: both `Host()` rules complete, bind sources absolute, no `ports:`.
 4. **Add the README.md Services entry.** Required, alphabetical, blockquote description plus links to
-   the compose file and upstream docs. Recent commits skipped this and the catalog is now missing six
-   services. Do not follow that precedent.
+   the compose file and upstream docs. The catalog currently lists every service; keep it that way.
 5. Commit. One service per commit. `fix:` for anything that already existed.
 
 ## Do not
 
 - **Edit CLAUDE.md as part of a service commit.** If a convention there is stale, report it and leave
   it. That is its own commit.
-- **Fix `$LOCAL_DOMAIN_NAME` in other services.** 25 files still reference it. Only touch the one you
-  are working on.
 - **Deploy.** That happens separately, on the host.

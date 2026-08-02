@@ -287,6 +287,20 @@ host; see the compose file header.
 - [Dashdot - GitHub](https://github.com/MauriceNino/dashdot)
 - [Dashdot - Documentation](https://getdashdot.com/docs/installation/docker-compose)
 
+### DNS
+
+> CoreDNS is a DNS server that chains plugins.
+
+Tailnet-only split DNS, so Tailscale clients resolve `*.$SERVICE_DOMAIN` to the docker host. Uses
+`network_mode: host` to bind the tailscale0 interface, answers on port 53 rather than HTTP, and so
+carries no Traefik labels. Generate the Corefile with
+[generate-dns-config.sh](./services/dns/generate-dns-config.sh) before the first start; it holds the
+real domain, so it is not kept in git.
+
+- [compose.yaml](./services/dns/compose.yaml)
+- [Design and setup notes](./services/dns/TAILSCALE.md)
+- [CoreDNS - Manual](https://coredns.io/manual/toc/)
+
 ### FTP Server
 
 > A very small and simple Docker image running an FTP server.
@@ -612,6 +626,13 @@ systemctl restart docker
 See [What is the parameter "max_map_count" and does it affect the server performance? ](https://access.redhat.com/solutions/99913)
 and [Elasticsearch: Max virtual memory areas vm.max_map_count [65530] is too low, increase to at least [262144]](https://stackoverflow.com/questions/51445846/elasticsearch-max-virtual-memory-areas-vm-max-map-count-65530-is-too-low-inc) for more
 information.
+
+### Stirling PDF
+
+> A locally hosted web application that allows you to perform various operations on PDF files.
+
+- [compose.yaml](./services/stirling-pdf/compose.yaml)
+- [Stirling PDF - Production deployment guide](https://docs.stirlingpdf.com/Production-Deployment-Guide#docker-compose-setup)
 
 ### Traefik
 
