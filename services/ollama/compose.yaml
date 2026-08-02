@@ -1,0 +1,82 @@
+# Documentation Reference:
+# https://docs.openwebui.com/getting-started/env-configuration/
+#
+# Adapted from:
+# https://github.com/open-webui/open-webui/blob/main/docker-compose.yaml
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
+#
+# Open WebUI is the web front end; ollama is the model runtime behind it. The
+# routing hostname is ollama.$SERVICE_DOMAIN because that is what it has always
+# been, even though the container answering it is open-webui.
+#
+# ollama stays on proxy without Traefik labels so other stacks can call its API
+# at http://ollama:11434, the same way they reach postgres and redis.
+name: olama
+services:
+  ollama:
+    image: "ollama/ollama:latest"
+    container_name: "ollama"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    # Ollama expects a terminal, and without this the server exits at startup.
+    tty: true
+    networks:
+      - "proxy"
+    volumes:
+      # Downloaded model weights. Tens of GB, and slow to rebuild.
+      - "ollama:/root/.ollama"
+
+  open-webui:
+    image: "ghcr.io/open-webui/open-webui:main"
+    container_name: "open-webui"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - ollama
+    networks:
+      - "proxy"
+    environment:
+      # See https://docs.openwebui.com/getting-started/env-configuration/
+      OLLAMA_BASE_URL: "http://ollama:11434"
+      # Used for links in notifications and for OAuth redirects.
+      WEBUI_URL: "https://ollama.${SERVICE_DOMAIN:?required, see header}"
+      # WEBUI_SECRET_KEY is deliberately not set. The image generates one on
+      # first run and stores it in .webui_secret_key inside the data volume
+      # below, so sessions survive restarts without a secret in the config. It
+      # was previously set to an empty string, which did the same thing far less
+      # obviously.
+    extra_hosts:
+      # Lets a model reach services listening on the docker host itself.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Chats, users, prompts and settings.
+      - "open-webui:/app/backend/data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ollama.entrypoints=http"
+      - "traefik.http.routers.ollama.rule=Host(`ollama.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.ollama-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.ollama.middlewares=ollama-https-redirect"
+      - "traefik.http.routers.ollama-secure.entrypoints=https"
+      - "traefik.http.routers.ollama-secure.rule=Host(`ollama.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.ollama-secure.tls=true"
+      - "traefik.http.routers.ollama-secure.service=ollama"
+      - "traefik.http.services.ollama.loadbalancer.server.port=8080"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  # Both keep the olama_ prefix from the pinned project name above. The
+  # directory is spelled ollama now, so without that `name:` key these would
+  # resolve to ollama_ollama and ollama_open-webui, and the model weights on the
+  # host would be orphaned.
+  ollama:
+  open-webui:

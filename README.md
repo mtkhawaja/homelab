@@ -374,6 +374,18 @@ the editor point somewhere unreachable.
 - [n8n - Docker installation](https://docs.n8n.io/hosting/installation/docker/)
 - [n8n - Environment variables](https://docs.n8n.io/hosting/configuration/environment-variables/)
 
+### Ollama and Open WebUI
+
+> Open WebUI is an extensible, self-hosted AI interface. Ollama gets up and running with large language models locally.
+
+Served on `ollama.$SERVICE_DOMAIN`, which reaches Open WebUI. Ollama itself carries no Traefik
+labels, so other stacks call its API at `http://ollama:11434` over `proxy`. The compose project name
+is pinned to `olama` to match the old directory spelling, so the model weights are not orphaned.
+
+- [compose.yaml](./services/ollama/compose.yaml)
+- [Open WebUI - Environment variables](https://docs.openwebui.com/getting-started/env-configuration/)
+- [Ollama - Dockerhub](https://hub.docker.com/r/ollama/ollama)
+
 ### Paperless-ngx
 
 > A community-supported supercharged document management system: scan, index and archive all your physical documents.
