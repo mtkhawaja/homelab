@@ -1,0 +1,60 @@
+# Documentation Reference:
+# https://hub.docker.com/r/garethflowers/ftp-server
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. All are
+# guarded, so Compose refuses to start rather than running with a blank one.
+#
+#   BASE_VOLUME_DIRECTORY - host path holding the share mounted below
+#   FTP_USER              - login name, and the home directory the share mounts at
+#   FTP_PASS              - password for FTP_USER
+#   FTP_PUBLIC_IP         - address handed to clients for passive-mode data
+#                           connections. The docker host's LAN address for
+#                           local use, or the router's WAN address if port 21
+#                           and 40000-40009 are forwarded from outside.
+#
+# FTP_USER and FTP_PASS were previously referenced but defined nowhere, so both
+# rendered as empty strings. That is worse than leaving them out: an explicit
+# empty value overrides the image's own `foo`/`bar` defaults, and an empty
+# FTP_USER also collapsed the mount target from /home/<user> to /home, mounting
+# the share over the whole home directory.
+#
+# PUBLIC_IP was hardcoded to 192.168.0.1, which is the placeholder from
+# upstream's example command rather than an address on this network. Passive
+# mode hands that address to clients, so it has to be one they can actually
+# reach.
+#
+# FTP is not HTTP, so this carries no Traefik labels and publishes its ports
+# directly. It still joins proxy so other stacks can reach it as `ftp`.
+services:
+  ftp-server:
+    image: "garethflowers/ftp-server:latest"
+    container_name: "ftp"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    ports:
+      # 21 is the control channel, 20 is active-mode data.
+      - "20-21:20-21/tcp"
+      # Passive-mode data range. Clients that cannot accept an inbound
+      # connection use these instead of port 20.
+      - "40000-40009:40000-40009/tcp"
+    environment:
+      - TZ=America/New_York
+      # Ownership of the files inside the share, matching the host user.
+      - UID=1000
+      - GID=1000
+      - "FTP_USER=${FTP_USER:?required - FTP login name, also the home directory name}"
+      - "FTP_PASS=${FTP_PASS:?required - password for FTP_USER}"
+      - "PUBLIC_IP=${FTP_PUBLIC_IP:?required - address clients use for passive-mode connections}"
+    volumes:
+      # Stays a bind mount: the point of the share is that these files are
+      # reachable on the host, alongside everything else under
+      # $BASE_VOLUME_DIRECTORY. A named volume would bury them under the Docker
+      # root. The path must match FTP_USER, which is the account's home.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding the FTP share}/ftp/data:/home/${FTP_USER}"
+networks:
+  proxy:
+    external: true

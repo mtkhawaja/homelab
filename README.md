@@ -255,6 +255,17 @@ services:
 - [Dashdot - GitHub](https://github.com/MauriceNino/dashdot)
 - [Dashdot - Documentation](https://getdashdot.com/docs/installation/docker-compose)
 
+### FTP Server
+
+> A very small and simple Docker image running an FTP server.
+
+Publishes 20-21 for the control and active-data channels, plus 40000-40009 for passive mode, since
+Traefik only proxies HTTP. `FTP_PUBLIC_IP` is the address handed to clients for passive connections,
+so it has to be one they can reach.
+
+- [compose.yaml](./services/ftp/compose.yaml)
+- [FTP Server - Dockerhub](https://hub.docker.com/r/garethflowers/ftp-server)
+
 ### Garage
 
 > An open-source distributed object storage service tailored for self-hosting.
