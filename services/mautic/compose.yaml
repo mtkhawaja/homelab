@@ -1,0 +1,151 @@
+# Documentation Reference:
+# https://github.com/mautic/docker-mautic
+# https://mautic.org/docs/en/getting_started/how_to_install_mautic.html
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN          - Traefik host rules, e.g. local.example.com
+#   MAUTIC_DB_USER          - MariaDB user owning the mautic database
+#   MAUTIC_DB_PASSWORD      - password for that user
+#   MAUTIC_DB_ROOT_PASSWORD - MariaDB root password
+#
+# None of the three credentials were defined anywhere, so they all rendered as
+# empty strings. MariaDB refuses to initialise without a root password, and an
+# empty MARIADB_USER means the mautic user is never created, so a first start
+# could not have worked. On an existing deployment set them to what the database
+# was actually initialised with; MariaDB ignores them once the data directory
+# exists, so a mismatch shows up as a failed login rather than a reinitialise.
+#
+# The database name was split between MARIADB_DATABASE, hardcoded to mautic, and
+# MAUTIC_DB_DATABASE, which was empty. They are one value now.
+#
+# Only `mautic` joins proxy. The worker, cron and database containers are
+# private to this stack.
+services:
+  mautic:
+    image: "mautic/mautic:latest"
+    container_name: "mautic"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "mautic-internal"
+      - "proxy"
+    depends_on:
+      mautic-db:
+        condition: service_healthy
+    environment:
+      DOCKER_MAUTIC_ROLE: "mautic_web"
+      DOCKER_MAUTIC_RUN_MIGRATIONS: "true"
+      MAUTIC_DB_HOST: "mautic-db"
+      MAUTIC_DB_PORT: "3306"
+      MAUTIC_DB_DATABASE: "mautic"
+      MAUTIC_DB_USER: "${MAUTIC_DB_USER:?required - MariaDB user owning the mautic database}"
+      MAUTIC_DB_PASSWORD: "${MAUTIC_DB_PASSWORD:?required - password for MAUTIC_DB_USER}"
+      # Mautic builds tracking pixels and email links from site_url, so it has
+      # to match the URL Traefik publishes. Any local.php setting can be given
+      # as MAUTIC_<SETTING>, which is how site_url is set here.
+      MAUTIC_SITE_URL: "https://mautic.${SERVICE_DOMAIN:?required, see header}"
+    volumes:
+      - "mautic_config:/var/www/html/config"
+      - "mautic_logs:/var/www/html/var/logs"
+      - "mautic_media:/var/www/html/docroot/media"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mautic.entrypoints=http"
+      - "traefik.http.routers.mautic.rule=Host(`mautic.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.mautic-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.mautic.middlewares=mautic-https-redirect"
+      - "traefik.http.routers.mautic-secure.entrypoints=https"
+      - "traefik.http.routers.mautic-secure.rule=Host(`mautic.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.mautic-secure.tls=true"
+      - "traefik.http.routers.mautic-secure.service=mautic"
+      - "traefik.http.services.mautic.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+
+  mautic-worker:
+    image: "mautic/mautic:latest"
+    container_name: "mautic-worker"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "mautic-internal"
+    depends_on:
+      mautic-db:
+        condition: service_healthy
+      mautic:
+        condition: service_started
+    environment:
+      DOCKER_MAUTIC_ROLE: "mautic_worker"
+      MAUTIC_DB_HOST: "mautic-db"
+      MAUTIC_DB_PORT: "3306"
+      MAUTIC_DB_DATABASE: "mautic"
+      MAUTIC_DB_USER: "${MAUTIC_DB_USER:?required - MariaDB user owning the mautic database}"
+      MAUTIC_DB_PASSWORD: "${MAUTIC_DB_PASSWORD:?required - password for MAUTIC_DB_USER}"
+    volumes:
+      - "mautic_config:/var/www/html/config"
+      - "mautic_logs:/var/www/html/var/logs"
+      - "mautic_media:/var/www/html/docroot/media"
+
+  mautic-cron:
+    image: "mautic/mautic:latest"
+    container_name: "mautic-cron"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "mautic-internal"
+    depends_on:
+      mautic-db:
+        condition: service_healthy
+      mautic:
+        condition: service_started
+    environment:
+      DOCKER_MAUTIC_ROLE: "mautic_cron"
+      MAUTIC_DB_HOST: "mautic-db"
+      MAUTIC_DB_PORT: "3306"
+      MAUTIC_DB_DATABASE: "mautic"
+      MAUTIC_DB_USER: "${MAUTIC_DB_USER:?required - MariaDB user owning the mautic database}"
+      MAUTIC_DB_PASSWORD: "${MAUTIC_DB_PASSWORD:?required - password for MAUTIC_DB_USER}"
+    volumes:
+      - "mautic_config:/var/www/html/config"
+      - "mautic_logs:/var/www/html/var/logs"
+      - "mautic_media:/var/www/html/docroot/media"
+
+  mautic-db:
+    image: "mariadb:lts-noble"
+    container_name: "mautic-db"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "mautic-internal"
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+    environment:
+      MARIADB_DATABASE: "mautic"
+      MARIADB_USER: "${MAUTIC_DB_USER:?required - MariaDB user owning the mautic database}"
+      MARIADB_PASSWORD: "${MAUTIC_DB_PASSWORD:?required - password for MAUTIC_DB_USER}"
+      MARIADB_ROOT_PASSWORD: "${MAUTIC_DB_ROOT_PASSWORD:?required - MariaDB root password}"
+    volumes:
+      - "mautic_db_data:/var/lib/mysql"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+networks:
+  proxy:
+    external: true
+  mautic-internal:
+    driver: bridge
+volumes:
+  mautic_config:
+  mautic_logs:
+  mautic_media:
+  mautic_db_data:

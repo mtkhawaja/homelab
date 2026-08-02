@@ -352,6 +352,18 @@ Manga, comics and books stay bind mounts so the same trees remain reachable over
 - [Kavita - Installation Instructions](https://wiki.kavitareader.com/installation/docker/)
 - [Kavita - Dockerhub](https://hub.docker.com/r/jvmilazz0/kavita)
 
+### Mautic
+
+> Mautic is open-source marketing automation software.
+
+Four containers: the web role, a worker, a cron role and MariaDB. Only the web role is routed.
+`MAUTIC_SITE_URL` has to match the hostname Traefik publishes, or tracking pixels and email links
+point somewhere unreachable.
+
+- [compose.yaml](./services/mautic/compose.yaml)
+- [Mautic - Docker images](https://github.com/mautic/docker-mautic)
+- [Mautic - Installation](https://mautic.org/docs/en/getting_started/how_to_install_mautic.html)
+
 ### Mongo and Mongo Express
 
 > MongoDB is a source-available, cross-platform, document-oriented database program.
