@@ -1,0 +1,148 @@
+# Documentation Reference:
+# https://docs.paperless-ngx.com/setup/
+# https://docs.paperless-ngx.com/configuration/
+#
+# Adapted from upstream's docker-compose.postgres-tika.yml.
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN         - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY  - host path for the consume and export bind mounts
+#   PAPERLESS_DB_USER      - Postgres role owning the paperless database
+#   PAPERLESS_DB_PASSWORD  - password for that role
+#
+# The database credentials were POSTGRES_USER and POSTGRES_PASSWORD, both
+# falling back to `paperless`. Those names are shared with services/postgres and
+# services/sonarqube, so setting them for any one stack silently changed the
+# others. On an existing deployment set these two to what the database was
+# actually initialised with, which is paperless and paperless unless
+# POSTGRES_USER was set in common.env. Postgres ignores them once the data
+# directory exists, so a mismatch shows up as a failed login.
+#
+# Only the webserver joins the proxy network. broker, db, gotenberg and tika are
+# private to this stack rather than shared services, so they stay on the
+# internal network where nothing else can reach them.
+services:
+  broker:
+    image: "docker.io/library/redis:8"
+    container_name: "paperless-broker"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "paperless"
+    volumes:
+      - "paperless-broker-data:/data"
+
+  db:
+    image: "docker.io/library/postgres:18"
+    container_name: "paperless-db"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "paperless"
+    environment:
+      POSTGRES_DB: "paperless"
+      POSTGRES_USER: "${PAPERLESS_DB_USER:?required - Postgres role owning the paperless database}"
+      POSTGRES_PASSWORD: "${PAPERLESS_DB_PASSWORD:?required - password for PAPERLESS_DB_USER}"
+    volumes:
+      # postgres:18 declares its volume at /var/lib/postgresql, one level above
+      # PGDATA at /var/lib/postgresql/18/docker.
+      - "paperless-db-data:/var/lib/postgresql"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U $$POSTGRES_USER -d paperless"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  gotenberg:
+    image: "docker.io/gotenberg/gotenberg:8.25"
+    container_name: "paperless-gotenberg"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "paperless"
+    # The chromium route converts .eml files. External content such as tracking
+    # pixels and javascript is disallowed.
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+
+  tika:
+    image: "docker.io/apache/tika:latest"
+    container_name: "paperless-tika"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "paperless"
+
+  webserver:
+    image: "ghcr.io/paperless-ngx/paperless-ngx:latest"
+    container_name: "paperless"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+      - "paperless"
+    depends_on:
+      db:
+        condition: service_healthy
+      broker:
+        condition: service_started
+      gotenberg:
+        condition: service_started
+      tika:
+        condition: service_started
+    environment:
+      # See https://docs.paperless-ngx.com/configuration/
+      PAPERLESS_REDIS: "redis://broker:6379"
+      PAPERLESS_DBHOST: "db"
+      PAPERLESS_DBNAME: "paperless"
+      PAPERLESS_DBUSER: "${PAPERLESS_DB_USER:?required - Postgres role owning the paperless database}"
+      PAPERLESS_DBPASS: "${PAPERLESS_DB_PASSWORD:?required - password for PAPERLESS_DB_USER}"
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: "http://gotenberg:3000"
+      PAPERLESS_TIKA_ENDPOINT: "http://tika:9998"
+      PAPERLESS_URL: "https://paperless.${SERVICE_DOMAIN:?required, see header}"
+      PAPERLESS_ALLOWED_HOSTS: "paperless.${SERVICE_DOMAIN:?required, see header}"
+      PAPERLESS_USE_X_FORWARD_HOST: "true"
+      PAPERLESS_USE_X_FORWARD_PORT: "true"
+      PAPERLESS_TIME_ZONE: "America/New_York"
+    volumes:
+      # Application state and the document archive. Paperless alone reads both.
+      - "data:/usr/src/paperless/data"
+      - "media:/usr/src/paperless/media"
+      # These two stay bind mounts: consume is where documents are dropped from
+      # the host, and export is read back off it.
+      - "${BASE_VOLUME_DIRECTORY:?required, see header}/paperless/data/export:/usr/src/paperless/export"
+      - "${BASE_VOLUME_DIRECTORY:?required, see header}/paperless/data/consume:/usr/src/paperless/consume"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.paperless.entrypoints=http"
+      - "traefik.http.routers.paperless.rule=Host(`paperless.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.paperless-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.paperless.middlewares=paperless-https-redirect"
+      - "traefik.http.routers.paperless-secure.entrypoints=https"
+      - "traefik.http.routers.paperless-secure.rule=Host(`paperless.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.paperless-secure.tls=true"
+      - "traefik.http.routers.paperless-secure.service=paperless"
+      - "traefik.http.services.paperless.loadbalancer.server.port=8000"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+  paperless:
+    driver: bridge
+volumes:
+  data:
+  media:
+  paperless-db-data:
+  paperless-broker-data:

@@ -350,6 +350,18 @@ the editor point somewhere unreachable.
 - [n8n - Docker installation](https://docs.n8n.io/hosting/installation/docker/)
 - [n8n - Environment variables](https://docs.n8n.io/hosting/configuration/environment-variables/)
 
+### Paperless-ngx
+
+> A community-supported supercharged document management system: scan, index and archive all your physical documents.
+
+Five containers: the webserver plus Postgres, Redis, Gotenberg and Tika. Only the webserver joins
+`proxy`; the rest are private to the stack. Documents are dropped into
+`$BASE_VOLUME_DIRECTORY/paperless/data/consume` on the host.
+
+- [compose.yaml](./services/paperless/compose.yaml)
+- [Paperless-ngx - Setup](https://docs.paperless-ngx.com/setup/)
+- [Paperless-ngx - Configuration](https://docs.paperless-ngx.com/configuration/)
+
 ### Redis
 
 > The open source, in-memory data store used by millions of developers as a cache, vector database, document database, streaming engine, and message broker.
