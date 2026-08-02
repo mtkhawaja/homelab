@@ -1,0 +1,74 @@
+# Documentation Reference:
+# https://github.com/plexinc/pms-docker
+# https://support.plex.tv/articles/200288586-installation/
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN             - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY      - host path holding the media and transcode dirs
+#   SECONDARY_VOLUME_DIRECTORY - host path of the second media location
+#
+# Plex publishes its ports as well as sitting behind Traefik. The web app is
+# reachable over both, but clients on the LAN find the server by broadcasting on
+# 1900/udp and the 32410-32414/udp range, which Traefik cannot proxy. Remote
+# access and the apps use 32400 directly.
+#
+# PLEX_CLAIM is only needed to link a brand new server to a Plex account, and
+# only for the first four minutes after the token is generated. Get one from
+# https://www.plex.tv/claim/ and pass it in the environment for that first start.
+services:
+  plex:
+    image: "plexinc/pms-docker:latest"
+    container_name: "plex"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    ports:
+      - "32400:32400/tcp"
+      - "3005:3005/tcp"
+      - "8324:8324/tcp"
+      - "32469:32469/tcp"
+      - "1900:1900/udp"
+      - "32410:32410/udp"
+      - "32412:32412/udp"
+      - "32413:32413/udp"
+      - "32414:32414/udp"
+    environment:
+      TZ: "America/New_York"
+      PLEX_UID: "1000"
+      PLEX_GID: "1000"
+      VERSION: "docker"
+    volumes:
+      # Library database, metadata and artwork. Nothing on the host reads it.
+      - "plex-config:/config"
+      # Transcoder scratch space. Only Plex touches it.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding the media and transcode dirs}/plex/transcode:/transcode"
+      # Media, shared with the host over Samba and FTP, so these stay bind
+      # mounts.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding the media and transcode dirs}/plex/media:/data"
+      - "${SECONDARY_VOLUME_DIRECTORY:?required - host path of the second media location}:/secondary-data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.plex.entrypoints=http"
+      - "traefik.http.routers.plex.rule=Host(`plex.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.plex-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.plex.middlewares=plex-https-redirect"
+      - "traefik.http.routers.plex-secure.entrypoints=https"
+      - "traefik.http.routers.plex-secure.rule=Host(`plex.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.plex-secure.tls=true"
+      - "traefik.http.routers.plex-secure.service=plex"
+      - "traefik.http.services.plex.loadbalancer.server.port=32400"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  plex-config:
+    # Pinned, so it resolves to `plex-config` rather than being namespaced to
+    # `plex_plex-config`. Leave it: the existing volume on the host carries the
+    # unprefixed name.
+    name: plex-config

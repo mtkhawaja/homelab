@@ -76,6 +76,18 @@ docker network create proxy
 All services will belong to this network and traefik will route traffic to the appropriate service.
 As such, typically, we will **not** be [publishing ports](https://docs.docker.com/network/#published-ports) for our services except for traefik and pi-hole.
 
+### Plex
+
+> Plex organises all of your personal media so you can enjoy it no matter where you are.
+
+Publishes its own ports as well as sitting behind Traefik: clients on the LAN discover the server by
+broadcasting on 1900/udp and the 32410-32414/udp range, which Traefik cannot proxy. Media stays on
+bind mounts so it remains reachable over Samba and FTP.
+
+- [compose.yaml](./services/plex/compose.yaml)
+- [Plex - Docker images](https://github.com/plexinc/pms-docker)
+- [Plex - Installation](https://support.plex.tv/articles/200288586-installation/)
+
 ### Pi-Hole
 
 #### Ubuntu Specific Configuration
