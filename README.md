@@ -444,7 +444,7 @@ sudo chown -R 5050:5050 "$BASE_VOLUME_DIRECTORY/admin/data"
 
 > the code quality tool for better code
 
-- [docker-compose.yaml](./docker-volumes/sonarqube/docker-compose.yaml)
+- [compose.yaml](./services/sonarqube/compose.yaml)
 - [SonarQube - Dockerhub](https://hub.docker.com/_/sonarqube)
 
 Note: Ensure that the following key is set in the `/etc/sysctl.conf`:

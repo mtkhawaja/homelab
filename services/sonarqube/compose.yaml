@@ -1,0 +1,109 @@
+# Documentation Reference:
+# https://docs.sonarsource.com/sonarqube-server/latest/setup-and-upgrade/install-the-server/introduction/
+# https://hub.docker.com/_/sonarqube
+#
+# SonarQube with its own Postgres. Unrelated to services/postgres.
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN         - Traefik host rules, e.g. local.example.com
+#   SONARQUBE_DB_USER      - Postgres role owning the sonar database
+#   SONARQUBE_DB_PASSWORD  - password for that role
+#
+# The credentials were previously POSTGRES_USER and POSTGRES_PASSWORD with
+# `postgres` as the fallback for both. Those names are shared with
+# services/postgres, paperless, twenty and vikunja, so setting them for any one
+# stack silently changed the others. On an existing deployment set these two to
+# whatever the database was actually initialised with, which is postgres and
+# postgres unless POSTGRES_USER was set in common.env. Postgres ignores these
+# once the data directory exists, so a mismatch shows up as a failed login
+# rather than a fresh database.
+#
+# SonarQube runs Elasticsearch internally and needs vm.max_map_count raised on
+# the host:
+#
+#   sudo sysctl -w vm.max_map_count=524288
+#
+# Make it permanent in /etc/sysctl.d/ or SonarQube will fail to start after a
+# reboot.
+services:
+  sq-pg-db-server:
+    # Pinned to 17, not 18. Postgres 18 moved its declared volume up to
+    # /var/lib/postgresql and puts PGDATA in a versioned subdirectory, so the
+    # mount below would no longer contain the data directory. Upgrading past 17
+    # means moving the mount and running a pg_upgrade, not just a tag change.
+    image: "postgres:17"
+    container_name: "sq-pg-db-server"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+      - POSTGRES_DB=sonar
+      - "POSTGRES_USER=${SONARQUBE_DB_USER:?required - Postgres role owning the sonar database}"
+      - "POSTGRES_PASSWORD=${SONARQUBE_DB_PASSWORD:?required - password for SONARQUBE_DB_USER}"
+    volumes:
+      - "sq-postgres-data:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U $$POSTGRES_USER -d sonar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  sonarqube:
+    image: "sonarqube:community"
+    container_name: "sonarqube"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    depends_on:
+      sq-pg-db-server:
+        condition: service_healthy
+    environment:
+      - TZ=America/New_York
+      - SONAR_JDBC_URL=jdbc:postgresql://sq-pg-db-server:5432/sonar
+      - "SONAR_JDBC_USERNAME=${SONARQUBE_DB_USER:?required - Postgres role owning the sonar database}"
+      - "SONAR_JDBC_PASSWORD=${SONARQUBE_DB_PASSWORD:?required - password for SONARQUBE_DB_USER}"
+    ulimits:
+      # Elasticsearch, which SonarQube embeds, refuses to start below this.
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - "sq-data:/opt/sonarqube/data"
+      - "sq-extensions:/opt/sonarqube/extensions"
+      - "sq-logs:/opt/sonarqube/logs"
+    labels:
+      # A major upgrade migrates the database and cannot be rolled back, so
+      # Watchtower is told to leave it alone.
+      - "com.centurylinklabs.watchtower.enable=false"
+      - "traefik.enable=true"
+      - "traefik.http.routers.sonar-qube.entrypoints=http"
+      - "traefik.http.routers.sonar-qube.rule=Host(`sonar-qube.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.sonar-qube-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.sonar-qube.middlewares=sonar-qube-https-redirect"
+      - "traefik.http.routers.sonar-qube-secure.entrypoints=https"
+      - "traefik.http.routers.sonar-qube-secure.rule=Host(`sonar-qube.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.sonar-qube-secure.tls=true"
+      - "traefik.http.routers.sonar-qube-secure.service=sonar-qube"
+      - "traefik.http.services.sonar-qube.loadbalancer.server.port=9000"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  sq-data:
+    name: sq-data
+  sq-postgres-data:
+    name: sq-postgres-data
+  sq-extensions:
+    name: sq-extensions
+  sq-logs:
+    name: sq-logs
