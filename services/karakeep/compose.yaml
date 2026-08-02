@@ -1,0 +1,108 @@
+# Documentation Reference:
+# https://docs.karakeep.app/Installation/docker
+#
+# Adapted from:
+# https://github.com/karakeep-app/karakeep/blob/main/docker/docker-compose.yml
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN     - Traefik host rules, e.g. local.example.com
+#   KARAKEEP_SECRET    - signs session cookies. Generate with:
+#                          openssl rand -base64 36
+#   MEILI_MASTER_KEY   - Meilisearch API key. Generate with:
+#                          openssl rand -base64 36
+#
+# Both secrets were referenced but defined in no env file, so they rendered as
+# empty strings: sessions were signed with an empty secret and Meilisearch ran
+# with no master key. Rotating KARAKEEP_SECRET logs everyone out.
+#
+# Optional, for the email-in feature. Leave unset to disable it.
+#   KARAKEEP_SMTP_HOST, KARAKEEP_SMTP_PORT, KARAKEEP_SMTP_USER,
+#   KARAKEEP_SMTP_PASSWORD, KARAKEEP_SMTP_FROM
+#
+# Only `web` joins the proxy network. chrome and meilisearch are private to this
+# stack rather than shared services, so they stay internal.
+services:
+  web:
+    image: "ghcr.io/karakeep-app/karakeep:${KARAKEEP_VERSION:-release}"
+    container_name: "karakeep"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+      - "karakeep-internal"
+    depends_on:
+      - meilisearch
+      - chrome
+    environment:
+      MEILI_ADDR: "http://meilisearch:7700"
+      BROWSER_WEB_URL: "http://chrome:9222"
+      # Upstream is emphatic that this stays /data and that a custom location
+      # is done by changing the volume mapping below instead.
+      DATA_DIR: "/data"
+      NEXTAUTH_SECRET: "${KARAKEEP_SECRET:?required - generate with openssl rand -base64 36}"
+      MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:?required - generate with openssl rand -base64 36}"
+      # Has to match the URL Traefik publishes, or sign-in redirects break.
+      NEXTAUTH_URL: "https://karakeep.${SERVICE_DOMAIN:?required, see header}"
+      # Optional email-in support. Unset means disabled.
+      SMTP_HOST: "${KARAKEEP_SMTP_HOST:-}"
+      SMTP_PORT: "${KARAKEEP_SMTP_PORT:-}"
+      SMTP_SECURE: "true"
+      SMTP_USER: "${KARAKEEP_SMTP_USER:-}"
+      SMTP_PASSWORD: "${KARAKEEP_SMTP_PASSWORD:-}"
+      SMTP_FROM: "${KARAKEEP_SMTP_FROM:-}"
+    volumes:
+      - "data:/data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.karakeep.entrypoints=http"
+      - "traefik.http.routers.karakeep.rule=Host(`karakeep.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.karakeep-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.karakeep.middlewares=karakeep-https-redirect"
+      - "traefik.http.routers.karakeep-secure.entrypoints=https"
+      - "traefik.http.routers.karakeep-secure.rule=Host(`karakeep.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.karakeep-secure.tls=true"
+      - "traefik.http.routers.karakeep-secure.service=karakeep"
+      - "traefik.http.services.karakeep.loadbalancer.server.port=3000"
+
+  chrome:
+    image: "gcr.io/zenika-hub/alpine-chrome:124"
+    container_name: "karakeep-chrome"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "karakeep-internal"
+    command:
+      - "--no-sandbox"
+      - "--disable-gpu"
+      - "--disable-dev-shm-usage"
+      - "--remote-debugging-address=0.0.0.0"
+      - "--remote-debugging-port=9222"
+      - "--hide-scrollbars"
+
+  meilisearch:
+    image: "getmeili/meilisearch:v1.13.3"
+    container_name: "karakeep-meilisearch"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "karakeep-internal"
+    environment:
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:?required - generate with openssl rand -base64 36}"
+    volumes:
+      - "meilisearch:/meili_data"
+networks:
+  proxy:
+    external: true
+  karakeep-internal:
+    driver: bridge
+volumes:
+  data:
+  meilisearch:

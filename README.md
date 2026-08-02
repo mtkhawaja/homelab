@@ -318,6 +318,17 @@ agent. Mounting the socket is equivalent to giving Jenkins root on the host.
 - [Jenkins - Dockerhub](https://hub.docker.com/r/jenkins/jenkins)
 - [Testcontainers - Docker environment](https://java.testcontainers.org/supported_docker_environment/)
 
+### Karakeep
+
+> A self-hostable bookmark-everything app with a touch of AI for the data hoarders out there.
+
+Three containers: the web app plus a headless Chrome for page capture and Meilisearch for full-text
+search. Only the web app joins `proxy`. `KARAKEEP_SECRET` and `MEILI_MASTER_KEY` are both required;
+rotating the former logs everyone out.
+
+- [compose.yaml](./services/karakeep/compose.yaml)
+- [Karakeep - Docker installation](https://docs.karakeep.app/Installation/docker)
+
 ### Kavita
 
 > Kavita is a fast, feature rich, cross platform reading server.
