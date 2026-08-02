@@ -1,0 +1,165 @@
+# Documentation Reference:
+# https://hub.docker.com/r/apache/kafka
+# https://kafka.apache.org/documentation/#kraft
+#
+# Adapted from:
+# https://github.com/apache/kafka/blob/trunk/docker/examples/docker-compose-files/cluster/isolated/plaintext/docker-compose.yml
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   KAFKA_ADVERTISED_HOST - hostname or IP that LAN clients use to reach the
+#                           docker host, e.g. 192.168.1.10
+#
+# A Kafka client connects to a bootstrap port, is told where the brokers
+# actually are, and reconnects to that address. The advertised host was
+# hardcoded to `localhost`, which is only correct for a client running on the
+# docker host itself. Anything else on the LAN was told to connect to its own
+# machine, and failed after the initial handshake.
+#
+# Upstream's example, which this came from, keeps its data in /tmp with no
+# volumes, because it is a throwaway demo. That was carried over as-is, so every
+# restart destroyed all topics, offsets and messages and reformatted the
+# cluster. Each node now has a named volume and KAFKA_LOG_DIRS points at it.
+#
+# Kafka speaks its own protocol, not HTTP, so there are no Traefik labels. The
+# brokers join proxy so other stacks can reach them at kafka-broker-N:19092, and
+# publish one port each for LAN clients. The controllers are internal to the
+# cluster and stay off proxy.
+#
+# Three controllers and three brokers on a single docker host give no real
+# availability, since one host failure takes down the whole quorum. The topology
+# is kept as it was, but a single combined-role node would give the same
+# durability here for a fraction of the memory.
+#
+# SECURITY: the brokers speak PLAINTEXT with no authentication and no ACLs.
+# Anything on the proxy network can read and write any topic, and the published
+# ports extend that to every host on the LAN. That was nominally true before as
+# well, but the advertised listeners pointed at localhost, so the published ports
+# did not work and the exposure was theoretical. Fixing them makes it real.
+# Anything sensitive going through this cluster needs SASL and ACLs first, or the
+# published ports dropped so it is reachable only from the proxy network.
+x-kafka-common: &kafka-common
+  image: "apache/kafka:latest"
+  restart: "unless-stopped"
+  security_opt:
+    - no-new-privileges:true
+
+# Every node needs an identical voter list, so it is written once. Drift between
+# nodes here is the classic way to end up with a quorum that never forms.
+x-kafka-cluster: &kafka-cluster
+  KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-controller-1:9093,2@kafka-controller-2:9093,3@kafka-controller-3:9093"
+  KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+
+x-controller: &controller
+  <<: *kafka-common
+  networks:
+    - "kafka-internal"
+
+x-broker: &broker
+  <<: *kafka-common
+  networks:
+    - "kafka-internal"
+    - "proxy"
+  depends_on:
+    - kafka-controller-1
+    - kafka-controller-2
+    - kafka-controller-3
+
+services:
+  kafka-controller-1:
+    <<: *controller
+    container_name: "kafka-controller-1"
+    environment:
+      <<: *kafka-cluster
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "controller"
+      KAFKA_LISTENERS: "CONTROLLER://:9093"
+    volumes:
+      # Only the cluster metadata log, but losing it loses the cluster identity.
+      - "controller-1-data:/var/lib/kafka/data"
+
+  kafka-controller-2:
+    <<: *controller
+    container_name: "kafka-controller-2"
+    environment:
+      <<: *kafka-cluster
+      KAFKA_NODE_ID: 2
+      KAFKA_PROCESS_ROLES: "controller"
+      KAFKA_LISTENERS: "CONTROLLER://:9093"
+    volumes:
+      - "controller-2-data:/var/lib/kafka/data"
+
+  kafka-controller-3:
+    <<: *controller
+    container_name: "kafka-controller-3"
+    environment:
+      <<: *kafka-cluster
+      KAFKA_NODE_ID: 3
+      KAFKA_PROCESS_ROLES: "controller"
+      KAFKA_LISTENERS: "CONTROLLER://:9093"
+    volumes:
+      - "controller-3-data:/var/lib/kafka/data"
+
+  kafka-broker-1:
+    <<: *broker
+    container_name: "kafka-broker-1"
+    ports:
+      - "29092:9092"
+    environment:
+      <<: *kafka-cluster
+      KAFKA_NODE_ID: 4
+      KAFKA_PROCESS_ROLES: "broker"
+      KAFKA_LISTENERS: "PLAINTEXT://:19092,PLAINTEXT_HOST://:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-broker-1:19092,PLAINTEXT_HOST://${KAFKA_ADVERTISED_HOST:?required - hostname or IP LAN clients use to reach the docker host}:29092"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+    volumes:
+      - "broker-1-data:/var/lib/kafka/data"
+
+  kafka-broker-2:
+    <<: *broker
+    container_name: "kafka-broker-2"
+    ports:
+      - "39092:9092"
+    environment:
+      <<: *kafka-cluster
+      KAFKA_NODE_ID: 5
+      KAFKA_PROCESS_ROLES: "broker"
+      KAFKA_LISTENERS: "PLAINTEXT://:19092,PLAINTEXT_HOST://:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-broker-2:19092,PLAINTEXT_HOST://${KAFKA_ADVERTISED_HOST:?required - hostname or IP LAN clients use to reach the docker host}:39092"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+    volumes:
+      - "broker-2-data:/var/lib/kafka/data"
+
+  kafka-broker-3:
+    <<: *broker
+    container_name: "kafka-broker-3"
+    ports:
+      - "49092:9092"
+    environment:
+      <<: *kafka-cluster
+      KAFKA_NODE_ID: 6
+      KAFKA_PROCESS_ROLES: "broker"
+      KAFKA_LISTENERS: "PLAINTEXT://:19092,PLAINTEXT_HOST://:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-broker-3:19092,PLAINTEXT_HOST://${KAFKA_ADVERTISED_HOST:?required - hostname or IP LAN clients use to reach the docker host}:49092"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+    volumes:
+      - "broker-3-data:/var/lib/kafka/data"
+networks:
+  proxy:
+    external: true
+  kafka-internal:
+    driver: bridge
+volumes:
+  controller-1-data:
+  controller-2-data:
+  controller-3-data:
+  broker-1-data:
+  broker-2-data:
+  broker-3-data:

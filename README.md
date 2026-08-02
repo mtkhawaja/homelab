@@ -331,6 +331,20 @@ agent. Mounting the socket is equivalent to giving Jenkins root on the host.
 - [Jenkins - Dockerhub](https://hub.docker.com/r/jenkins/jenkins)
 - [Testcontainers - Docker environment](https://java.testcontainers.org/supported_docker_environment/)
 
+### Kafka
+
+> A distributed event streaming platform.
+
+A KRaft cluster of three controllers and three brokers. Kafka speaks its own protocol rather than
+HTTP, so there are no Traefik labels: the brokers join `proxy` for other stacks to reach at
+`kafka-broker-N:19092`, and publish 29092, 39092 and 49092 for LAN clients. `KAFKA_ADVERTISED_HOST`
+is the address handed back to clients after the initial handshake, so it has to be one they can
+reach.
+
+- [compose.yaml](./services/kafka/compose.yaml)
+- [Kafka - Dockerhub](https://hub.docker.com/r/apache/kafka)
+- [Kafka - KRaft documentation](https://kafka.apache.org/documentation/#kraft)
+
 ### Karakeep
 
 > A self-hostable bookmark-everything app with a touch of AI for the data hoarders out there.
