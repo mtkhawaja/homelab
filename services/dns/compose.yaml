@@ -5,6 +5,10 @@
 # Tailnet-only DNS resolver providing split DNS for Tailscale clients.
 # See ./TAILSCALE.md for the design and setup steps.
 #
+# This does not replace services/pi-hole. That is the LAN's resolver and does the
+# ad blocking; this one answers the tailnet and resolves only the lab's own
+# hostnames. Both are intentional.
+#
 # CoreDNS is used rather than dnsmasq because the project publishes its own
 # image, and because the mounted Corefile is the complete configuration. There
 # are no image defaults to merge with or discover at runtime.

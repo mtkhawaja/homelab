@@ -18,6 +18,10 @@
 #
 # Pi-hole answers DNS on 53 for the whole LAN, which Traefik cannot proxy, so
 # the ports are published. The web UI is additionally routed through Traefik.
+#
+# services/dns does not supersede this. That is CoreDNS serving split DNS to the
+# tailnet only; this is the LAN's resolver and the thing doing the ad blocking.
+# Both are intentional.
 services:
   pihole:
     image: "pihole/pihole:latest"

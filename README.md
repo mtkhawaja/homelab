@@ -293,7 +293,13 @@ host; see the compose file header.
 
 Tailnet-only split DNS, so Tailscale clients resolve `*.$SERVICE_DOMAIN` to the docker host. Uses
 `network_mode: host` to bind the tailscale0 interface, answers on port 53 rather than HTTP, and so
-carries no Traefik labels. Generate the Corefile with
+carries no Traefik labels.
+
+This does **not** replace [Pi-Hole](#pi-hole). The two answer different clients for different
+reasons: CoreDNS serves the tailnet and only resolves the lab's own hostnames, while Pi-Hole is the
+LAN's resolver and does the ad blocking. Neither is redundant.
+
+Generate the Corefile with
 [generate-dns-config.sh](./services/dns/generate-dns-config.sh) before the first start; it holds the
 real domain, so it is not kept in git.
 
@@ -566,7 +572,10 @@ bind mounts so it remains reachable over Samba and FTP.
 
 > Network-wide Ad Blocking
 
-Answers DNS for the whole LAN on port 53, which Traefik cannot proxy, so its ports are published.
+The LAN's DNS resolver, and the reason the lab has ad blocking at all. Answers on port 53, which
+Traefik cannot proxy, so its ports are published. Separate from [DNS](#dns), which is CoreDNS
+serving the tailnet only; keep both.
+
 Excluded from Watchtower: v6 was a breaking release and upgrades here should be deliberate.
 
 - [compose.yaml](./services/pi-hole/compose.yaml)
