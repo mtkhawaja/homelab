@@ -1,82 +1,72 @@
 ---
 name: add-service
-description: Use when adding a new service to this homelab repo, or reworking an existing one under services/.
+description: Use when adding a new service to this homelab repo.
 ---
 
-# Adding or migrating a homelab service
+# Adding a homelab service
 
-CLAUDE.md already carries the conventions (layout, Traefik labels, `SERVICE_DOMAIN`, volume
+CLAUDE.md already carries the conventions (layout, Traefik labels, `SERVICE_DOMAIN`, guards, volume
 preference, validation, commit format) and is loaded every session. **Do not restate or re-derive
-it.** Copy the file shape from `services/calibre-web/compose.yaml`, the current
-reference implementation.
+it.** Copy the file shape from `services/calibre-web/compose.yaml`, the current reference
+implementation.
 
 This skill covers only what reading the repo does not already tell you.
 
-## Re-evaluate every bind mount, but convert in a separate commit
+## Adapt upstream, do not trust it
 
-This repo is actively moving from host mounts to named volumes. On an existing service a bind mount
-has to justify itself, and "it was already a bind mount" is not a justification.
+Fetch the upstream compose file. Do not invent one from memory, and do not carry it over unread: it
+is written to demo the project on a laptop. Relative bind mounts, published ports Traefik should
+front, placeholder secrets, and storage under `/tmp` (Kafka and Loki both default there, which looks
+fine until the first restart) all arrive looking deliberate.
 
-**Required output: a storage verdict table.** Every migration report ends with one. Every bind mount
-in the file gets a row. None may be omitted, including ones you are leaving alone:
+Check where the image actually writes and what it actually requires rather than believing the compose
+file. `docker run --rm --entrypoint sh <image> -c '...'` is cheap.
+
+## Every bind mount needs a named consumer
+
+**Required output: a storage verdict table.** Every report ends with one. Every bind mount in the
+file you are writing gets a row, including ones you are keeping:
 
 | Mount | Verdict | Why |
 |---|---|---|
-| `$BASE_VOLUME_DIRECTORY/vikunja/data/files` | Convert | Only Vikunja reads it, no host consumer |
+| `$BASE_VOLUME_DIRECTORY/plex/media` | Keep | Served to the host over Samba and FTP |
+| `/var/run/docker.sock` | Keep | The Docker daemon; not convertible |
+| `$BASE_VOLUME_DIRECTORY/beszel/data` | Named volume | Only this service reads it |
 
 **Keep** requires a named host consumer: media served over Samba or FTP, a path a backup job or
-another container reads, config a human edits on the host. Name it. Everything else is **Convert**.
-
-Data safety is never a Keep reason. It is the reason a Convert lands in its own commit.
-
-**The move commit changes no volume key**, whatever the verdict says. Converting orphans live data:
-the container starts against an empty volume while the real files sit on the host, unreferenced. A
-Convert verdict becomes the *next* commit, and that commit carries the host-side copy in the compose
-file header where whoever deploys will see it.
+another container reads, config a human edits on the host, a host socket. Name it. Everything else is
+a named volume.
 
 | Rationalization | Reality |
 |---|---|
-| "Converting would orphan the data, so Keep" | That is why Convert is a separate commit. It is not a reason to keep the bind mount. |
-| "The repo prefers named volumes for new services only" | No. Existing services are exactly what the migration is for. |
-| "The verdict is Convert, so I'll do it now" | The verdict is a recommendation. The host-side copy runs first, and not in this commit. |
-| "I documented the copy command" | In the report, not the artifact. Whoever deploys reads the file. |
-| "Docker seeds the volume from the image" | From the image, not from the host bind path. The user's files are not in the image. |
+| "Upstream used a bind mount" | Upstream is demoing on a laptop. That is not a host consumer. |
+| "A bind mount makes the data easier to inspect" | `docker volume inspect` and `docker exec` cover that. Not a consumer. |
+| "It is under `$BASE_VOLUME_DIRECTORY`, so it is fine" | That makes the path absolute, which is a separate requirement. It does not justify the mount. |
+| "The service might need host access later" | Add it when something actually reads it. |
 
-**Red flags. Stop and split the commit:**
+A new service has no live data, so there is nothing to orphan and no reason to split the commit.
+Get the volumes right the first time instead.
 
-- A `volumes:` key changed in a file you also moved.
-- You are writing a `docker run ... cp -a` recovery command into a report.
-- You are explaining why a data migration is safe.
-
-## The project name is the directory name
+## The directory name becomes the project name
 
 Compose derives the project name from the containing directory and namespaces volumes and networks
-with it, so `services/vikunja/` gives `vikunja_db-data`. **Renaming the directory orphans every named
-volume.**
+with it, so `services/vikunja/` gives `vikunja_db-data`. Pick the name deliberately: **renaming the
+directory later orphans every named volume**, and the fix is pinning the old name with a top-level
+`name:` key forever after.
 
-Verify on any move or rename rather than assuming. Render the old file and the new one, and diff the
-resolved `volumes:` and `networks:` blocks. They must match.
-
-```bash
-git show HEAD:<old-path> > "$SCRATCH/before.yaml"
-docker compose --project-name <old-dir-name> --file "$SCRATCH/before.yaml" config
-```
-
-Pass `--project-name` explicitly. Compose would otherwise name the project after whatever directory
-you parked the copy in, and the comparison silently comes out wrong.
-
-If the directory name has to change, pin the old one with a top-level `name:` key, and say so in a
-comment on the volume key.
+Match the directory to the routing hostname where you can, so `services/beszel/` serves
+`beszel.$SERVICE_DOMAIN`.
 
 ## Required steps
 
-1. Fetch the upstream compose file and adapt it. Do not invent one.
+1. Fetch the upstream compose file and adapt it, per above.
 2. Write the compose file, copying the Traefik label block from `calibre-web`.
-3. Validate with `docker compose config` (command in CLAUDE.md). Read the render, do not just check
-   the exit code: both `Host()` rules complete, bind sources absolute, no `ports:`.
+3. Run `./scripts/validate-compose.sh`. It runs `docker compose config` over every service and
+   rejects unguarded variables. Then read your service's render rather than trusting the exit code:
+   both `Host()` rules complete, bind sources absolute, no `ports:` on an HTTP service.
 4. **Add the README.md Services entry.** Required, alphabetical, blockquote description plus links to
    the compose file and upstream docs. The catalog currently lists every service; keep it that way.
-5. Commit. One service per commit. `fix:` for anything that already existed.
+5. Commit. One service per commit, `feat:` for a new one.
 
 ## Do not
 
