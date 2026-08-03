@@ -52,7 +52,7 @@ services:
       - PGID=1000
       - DEBUG=false
     volumes:
-      - "${BASE_VOLUME_DIRECTORY:?required - host path for the downloads and config mounts}/data/downloads:/data/downloads"
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the downloads and config mounts}/downloads:/data/downloads"
       # Also holds wireguard/wg0.conf.
       - "${BASE_VOLUME_DIRECTORY:?required - host path for the downloads and config mounts}/qbit-mullvad/config:/config"
       - "/etc/localtime:/etc/localtime:ro"
