@@ -21,8 +21,8 @@ services:
       - PGID=1000
       - TZ=America/New_York
       # Adds the Calibre binaries needed for ebook conversion.
-      - DOCKER_MODS=linuxserver/mods:universal-calibre #optional
-      - OAUTHLIB_RELAX_TOKEN_SCOPE=1 #optional
+      - DOCKER_MODS=linuxserver/mods:universal-calibre # optional
+      - OAUTHLIB_RELAX_TOKEN_SCOPE=1 # optional
     volumes:
       # Application state (settings, users, app database) — no host access needed.
       - "calibre-web-config:/config"
