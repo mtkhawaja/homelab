@@ -173,7 +173,7 @@ Save the generated output to the path the compose file bind-mounts,
 #!/usr/bin/env bash
 
 docker compose \
-  --env-file "./services/env-files/common.env" \
+  --env-file "./services/common.env" \
   --file "./services/dns/compose.yaml" up --detach
 ```
 

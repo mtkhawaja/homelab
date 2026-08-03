@@ -198,7 +198,7 @@ $(printf '\033[1m==> Next steps\033[0m')
 
        Then start the resolver:
          docker compose \\
-           --env-file "./services/env-files/common.env" \\
+           --env-file "./services/common.env" \\
            --file "./services/dns/compose.yaml" up --detach
 
     2. Register the resolver as a restricted nameserver (split DNS):

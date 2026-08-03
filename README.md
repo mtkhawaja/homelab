@@ -15,7 +15,12 @@ I highly recommend watching the video and reading his guide. I will be using the
 - A domain name that you own:
     - This will cost approximately ~$10 USD per year depending on the domain name.
     - I use [CloudFlare](https://www.cloudflare.com/products/registrar).
-- All the necessary env files. See [Environment Variables & .env files](./services/env-files/README.md) for more information.
+- All the necessary env files. Copy each `*.env.example` to the same name without `.example` and
+  fill it in; the repo-root `.gitignore` keeps `*.env` untracked. Shared values live in
+  [services/common.env.example](./services/common.env.example); a service needing secrets of its own
+  keeps a template beside its compose file, such as
+  [services/traefik/traefik.env.example](./services/traefik/traefik.env.example). Each compose file
+  header is the authoritative list of what that service needs.
 
 ## Conventions
 
@@ -113,8 +118,8 @@ Start the [pi-hole service](./services/pi-hole) as follows:
 #!/usr/bin/env bash
 
 docker compose \
-  --env-file "./services/env-files/common.env" \
-  --env-file "./services/env-files/pi-hole.env" \
+  --env-file "./services/common.env" \
+  --env-file "./services/pi-hole/pi-hole.env" \
   --file "./services/pi-hole/compose.yaml" up --detach
 ```
 
@@ -136,8 +141,8 @@ Start the [traefik service](./services/traefik/compose.yaml) as follows:
 #!/usr/bin/env bash
 
 docker compose \
-  --env-file "./services/env-files/common.env" \
-  --env-file "./services/env-files/traefik.env" \
+  --env-file "./services/common.env" \
+  --env-file "./services/traefik/traefik.env" \
   --file "./services/traefik/compose.yaml" up --detach
 ```
 
@@ -149,7 +154,7 @@ Start the [portainer service](./services/portainer/compose.yaml) as follows:
 #!/usr/bin/env bash
 
 docker compose \
-  --env-file "./services/env-files/common.env" \
+  --env-file "./services/common.env" \
   --file "./services/portainer/compose.yaml" up --detach
 ```
 

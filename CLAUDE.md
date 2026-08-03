@@ -10,20 +10,32 @@ and Traefik routing breaks:
 
 ```bash
 docker compose \
-  --env-file "./services/env-files/common.env" \
+  --env-file "./services/common.env" \
   --file "./services/<service>/compose.yaml" up --detach
 ```
 
 Everything lives under `services/`. `docker-volumes/` is gone.
 
-Add a second `--env-file` for services with their own (pi-hole, traefik, postgres, sonarqube).
+Add a second `--env-file` for services with their own, which sits beside the compose file — pi-hole,
+traefik, postgres and sonarqube have one:
+
+```bash
+docker compose \
+  --env-file "./services/common.env" \
+  --env-file "./services/traefik/traefik.env" \
+  --file "./services/traefik/compose.yaml" up --detach
+```
+
+Both have to be explicit. Compose would otherwise auto-load a `.env` from the compose file's own
+directory, but passing any `--env-file` disables that lookup, so a service-level file is never
+picked up on its own.
 
 ## Validation
 
 There is no test suite or linter. The only check is:
 
 ```bash
-docker compose --env-file ./services/env-files/common.env \
+docker compose --env-file ./services/common.env \
   --file ./services/<service>/compose.yaml config
 ```
 
@@ -36,10 +48,10 @@ the result out of git no matter which directory you put it in.
 - Services live under `services/<name>/`, one directory each, and the file is always named
   `compose.yaml` — the name the Compose Spec defines and Docker looks for first.
   `docker-compose.yaml` is the legacy fallback and no longer appears in this repo, so there is
-  nothing left to glob for. `services/env-files/` is the one directory there that is not a service;
-  it holds the `*.env.example` templates and the filled-in `*.env` files, which the root
-  `.gitignore` keeps untracked. Glob `services/*/compose.yaml` rather than `services/*` and it never
-  matters.
+  nothing left to glob for. A service's env file lives beside its compose file as
+  `services/<name>/<name>.env`; only the shared `services/common.env` sits outside a service
+  directory. The root `.gitignore` keeps every `*.env` untracked, so the `*.env.example` templates
+  are what a fresh clone gets.
 - Moving a service dir does not move its host data. Bind mounts are rooted at
   `$BASE_VOLUME_DIRECTORY`, which is a host path independent of the repo layout.
 - Bind mounts must use absolute host paths, not relative ones. Relative paths resolve against the

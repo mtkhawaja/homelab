@@ -179,7 +179,7 @@ $(printf '\033[1m==> Next steps\033[0m')
 
     2. Start it:
          docker compose \\
-           --env-file "./services/env-files/common.env" \\
+           --env-file "./services/common.env" \\
            --file "./services/garage/compose.yaml" up --detach
 
     3. Confirm the node applied its own layout:

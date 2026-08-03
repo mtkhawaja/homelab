@@ -6,7 +6,7 @@
 # so Compose refuses to start rather than interpolating an empty string.
 #
 #   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
-#   BASE_VOLUME_DIRECTORY - host path holding the env-files directory
+#   BASE_VOLUME_DIRECTORY - host path holding the env-files directory Portainer reads
 #
 # Both are also passed into the container, which is deliberate and specific to
 # this service: stacks deployed from inside Portainer take their interpolation
@@ -33,8 +33,11 @@ services:
       - "/etc/localtime:/etc/localtime:ro"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       # The env files themselves, so stacks deployed from the UI can reference
-      # them. A named host consumer, so this stays a bind mount.
-      - "${BASE_VOLUME_DIRECTORY:?required - host path holding the env-files directory}/env-files:/env-files:ro"
+      # them. A named host consumer, so this stays a bind mount. This is the
+      # copy on the docker host under $BASE_VOLUME_DIRECTORY, not the repo's
+      # *.env.example templates, and it keeps its flat layout regardless of how
+      # the repo arranges them.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding the env-files directory Portainer reads}/env-files:/env-files:ro"
       # Portainer's own database, users and stack definitions.
       - "portainer_data:/data"
     labels:
