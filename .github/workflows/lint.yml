@@ -9,60 +9,25 @@ on:
 permissions:
   contents: read
 
+# The checks themselves live in scripts/, so they can be run locally and linted
+# like any other code rather than being shell buried in YAML.
 jobs:
   compose:
     name: Compose files
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Validate
+        run: ./scripts/validate-compose.sh
 
-      # `docker compose config` needs values for the guarded variables before it
-      # will parse anything. They are derived from the compose files themselves
-      # rather than a checked-in fixture, so a new ${VAR:?...} can never silently
-      # opt a service out. The values are throwaway: config interpolates them, it
-      # does not connect to anything.
-      - name: Build a placeholder env file
-        run: |
-          grep -ohE '\$\{[A-Z0-9_]+:\?' services/*/compose.yaml \
-            | sed -E 's/^\$\{//; s/:\?$//' \
-            | sort -u \
-            | while read -r var; do
-                case "$var" in
-                  # Bind mount sources have to be absolute paths.
-                  *DIRECTORY) printf '%s=/srv/ci\n' "$var" ;;
-                  *) printf '%s=ci-placeholder\n' "$var" ;;
-                esac
-              done > ci.env
-
-      - name: docker compose config
-        run: |
-          rc=0
-          for f in services/*/compose.yaml; do
-            if ! out=$(docker compose --env-file ci.env --file "$f" config 2>&1); then
-              echo "::error file=$f::$(printf '%s' "$out" | tail -1)"
-              rc=1
-            fi
-          done
-          exit "$rc"
-
-      # config passes an unguarded ${VAR} by interpolating it to an empty string,
-      # which is how Host(`<service>.local.`) shipped across this repo unnoticed
-      # and how a bind mount can end up at /garage/data instead of under
-      # $BASE_VOLUME_DIRECTORY -- still absolute, so Docker just creates it. The
-      # guards are what make the check above meaningful, so they are enforced.
-      - name: Every variable is guarded or defaulted
-        run: |
-          rc=0
-          for f in services/*/compose.yaml; do
-            bare=$(grep -vE '^[[:space:]]*#' "$f" \
-              | grep -oE '(^|[^$])\$\{?[A-Z][A-Z0-9_]*\}?([^:a-zA-Z_}]|$)' \
-              | grep -oE '[A-Z][A-Z0-9_]*' | sort -u \
-              | while read -r v; do
-                  grep -qE "\\\$\{$v:[?-]" "$f" || echo "$v"
-                done | sort -u | paste -sd' ' -)
-            if [ -n "$bare" ]; then
-              echo "::error file=$f::Unguarded variables, use \${VAR:?...} or \${VAR:-default}: $bare"
-              rc=1
-            fi
-          done
-          exit "$rc"
+  shell:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install zsh and shellcheck
+        run: sudo apt-get update && sudo apt-get install -y zsh shellcheck
+      - name: Lint
+        run: ./scripts/lint-shell.sh
