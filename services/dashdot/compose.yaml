@@ -29,11 +29,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dashdot.entrypoints=http"
-      - "traefik.http.routers.dashdot.rule=Host(`dashdot.$SERVICE_DOMAIN`)"
+      - "traefik.http.routers.dashdot.rule=Host(`dashdot.${SERVICE_DOMAIN:?required, see header}`)"
       - "traefik.http.middlewares.dashdot-https-redirect.redirectscheme.scheme=https"
       - "traefik.http.routers.dashdot.middlewares=dashdot-https-redirect"
       - "traefik.http.routers.dashdot-secure.entrypoints=https"
-      - "traefik.http.routers.dashdot-secure.rule=Host(`dashdot.$SERVICE_DOMAIN`)"
+      - "traefik.http.routers.dashdot-secure.rule=Host(`dashdot.${SERVICE_DOMAIN:?required, see header}`)"
       - "traefik.http.routers.dashdot-secure.tls=true"
       - "traefik.http.routers.dashdot-secure.service=dashdot"
       - "traefik.http.services.dashdot.loadbalancer.server.port=3001"

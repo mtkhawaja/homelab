@@ -12,7 +12,7 @@
 #   BASE_VOLUME_DIRECTORY - host path for the garage.toml bind mount
 #
 # Generate the config with ./generate-garage-config.sh and save it to
-# $BASE_VOLUME_DIRECTORY/garage/data/garage.toml before the first start. It
+# ${BASE_VOLUME_DIRECTORY:?required - host path for the garage.toml bind mount}/garage/data/garage.toml before the first start. It
 # carries the RPC secret and admin token, so it is not kept in git.
 #
 # Traefik routes the S3 API only. 3901 (RPC, multi-node clustering), 3902
@@ -48,7 +48,7 @@ services:
       # Generated, not committed: contains rpc_secret and admin_token. The path
       # is absolute because a stack deployed through Portainer resolves relative
       # paths inside Portainer's own container rather than on the host.
-      - "$BASE_VOLUME_DIRECTORY/garage/data/garage.toml:/etc/garage.toml:ro"
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the garage.toml bind mount}/garage/data/garage.toml:/etc/garage.toml:ro"
       # Object index. Upstream prefers this on SSD, and it is the volume worth
       # backing up: losing it orphans the data below.
       - "garage-meta:/var/lib/garage/meta"
@@ -57,11 +57,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.garage.entrypoints=http"
-      - "traefik.http.routers.garage.rule=Host(`garage.$SERVICE_DOMAIN`)"
+      - "traefik.http.routers.garage.rule=Host(`garage.${SERVICE_DOMAIN:?required, see header}`)"
       - "traefik.http.middlewares.garage-https-redirect.redirectscheme.scheme=https"
       - "traefik.http.routers.garage.middlewares=garage-https-redirect"
       - "traefik.http.routers.garage-secure.entrypoints=https"
-      - "traefik.http.routers.garage-secure.rule=Host(`garage.$SERVICE_DOMAIN`)"
+      - "traefik.http.routers.garage-secure.rule=Host(`garage.${SERVICE_DOMAIN:?required, see header}`)"
       - "traefik.http.routers.garage-secure.tls=true"
       - "traefik.http.routers.garage-secure.service=garage"
       - "traefik.http.services.garage.loadbalancer.server.port=3900"

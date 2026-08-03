@@ -38,4 +38,4 @@ services:
       # Generate this file with ./generate-dns-config.sh and save it here. The
       # path is absolute because a stack deployed through Portainer resolves
       # relative paths inside Portainer's own container, not on the host.
-      - "$BASE_VOLUME_DIRECTORY/dns/data/Corefile:/etc/coredns/Corefile:ro"
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the Corefile bind mount}/dns/data/Corefile:/etc/coredns/Corefile:ro"

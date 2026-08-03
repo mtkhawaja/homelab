@@ -20,7 +20,7 @@
 #
 # config/redis.conf and scripts/docker-entrypoint-init.sh are kept in this
 # directory for reference but mounted from $BASE_VOLUME_DIRECTORY, so copy them
-# to $BASE_VOLUME_DIRECTORY/redis/ on the host before the first start. Absolute
+# to ${BASE_VOLUME_DIRECTORY:?required - host path holding the two files mounted below}/redis/ on the host before the first start. Absolute
 # paths are required because a stack deployed through Portainer resolves
 # relative paths inside Portainer's own container.
 #
@@ -45,8 +45,8 @@ services:
       - "6379:6379"
     volumes:
       - "redis-data:/data"
-      - "$BASE_VOLUME_DIRECTORY/redis/config/redis.conf:/usr/local/etc/redis/redis.conf:ro"
-      - "$BASE_VOLUME_DIRECTORY/redis/scripts/docker-entrypoint-init.sh:/docker-entrypoint-init.sh:ro"
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding the two files mounted below}/redis/config/redis.conf:/usr/local/etc/redis/redis.conf:ro"
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding the two files mounted below}/redis/scripts/docker-entrypoint-init.sh:/docker-entrypoint-init.sh:ro"
     # The script writes the ACL user into users.acl, then execs the command
     # below. redis.conf points `aclfile` at that same path.
     networks:

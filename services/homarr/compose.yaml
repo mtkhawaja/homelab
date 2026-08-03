@@ -44,11 +44,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.homarr.entrypoints=http"
-      - "traefik.http.routers.homarr.rule=Host(`homarr.$SERVICE_DOMAIN`)"
+      - "traefik.http.routers.homarr.rule=Host(`homarr.${SERVICE_DOMAIN:?required, see header}`)"
       - "traefik.http.middlewares.homarr-https-redirect.redirectscheme.scheme=https"
       - "traefik.http.routers.homarr.middlewares=homarr-https-redirect"
       - "traefik.http.routers.homarr-secure.entrypoints=https"
-      - "traefik.http.routers.homarr-secure.rule=Host(`homarr.$SERVICE_DOMAIN`)"
+      - "traefik.http.routers.homarr-secure.rule=Host(`homarr.${SERVICE_DOMAIN:?required, see header}`)"
       - "traefik.http.routers.homarr-secure.tls=true"
       - "traefik.http.routers.homarr-secure.service=homarr"
       - "traefik.http.services.homarr.loadbalancer.server.port=7575"
