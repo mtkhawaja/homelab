@@ -531,6 +531,19 @@ database and cannot be rolled back.
 - [compose.yaml](./services/nexus/compose.yaml)
 - [Nexus Repository Manager - Dockerhub](https://hub.docker.com/r/sonatype/nexus3)
 
+### ntfy
+
+> ntfy is a simple HTTP-based pub-sub notification service that lets you send notifications to your phone or desktop via scripts.
+
+Configured entirely through `NTFY_*` environment variables, so no `server.yml` is mounted. Other
+stacks publish by POSTing to `http://ntfy/<topic>` over `proxy`. Topics are readable and writable by
+anyone who can reach Traefik; locking that down means `NTFY_AUTH_DEFAULT_ACCESS=deny-all` plus
+`ntfy user add` against the container.
+
+- [compose.yaml](./services/ntfy/compose.yaml)
+- [ntfy - Installation](https://docs.ntfy.sh/install/)
+- [ntfy - Configuration](https://docs.ntfy.sh/config/)
+
 ### Ollama and Open WebUI
 
 > Open WebUI is an extensible, self-hosted AI interface. Ollama gets up and running with large language models locally.

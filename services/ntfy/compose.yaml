@@ -1,0 +1,89 @@
+# Documentation Reference:
+# https://docs.ntfy.sh/
+# https://docs.ntfy.sh/config/
+#
+# Adapted from:
+# https://docs.ntfy.sh/install/#docker (compose example)
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
+#
+# Pub-sub notifications over HTTP. Other stacks publish to it by POSTing to
+# http://ntfy/<topic> over `proxy`, so it carries no client credentials here.
+#
+# The image ships no /etc/ntfy/server.yml, and upstream's compose bind mounts
+# one in. No config file is used instead: every server.yml key has an NTFY_
+# environment equivalent, so the whole configuration lives below and there is
+# nothing to keep in sync on the host.
+#
+# NTFY_BEHIND_PROXY is not optional here. Without it ntfy sees every request as
+# coming from Traefik's address and rate limits the entire LAN as if it were a
+# single visitor.
+#
+# NTFY_BASE_URL has to be the URL Traefik publishes rather than the container
+# port, since it is what attachment and click URLs are built from.
+#
+# Upstream's compose suggests `user: UID:GID`. It is left off: the image runs as
+# root and ships none of these directories, so a fresh named volume is created
+# root-owned and is writable as-is. Pinning a uid would reintroduce exactly the
+# ownership problem audiobookshelf needs an init container for.
+services:
+  ntfy:
+    image: "binwiederhier/ntfy:latest"
+    container_name: "ntfy"
+    restart: "unless-stopped"
+    # ntfy dropped its own init process, so without this PID 1 never reaps.
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - "serve"
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+      - "NTFY_BASE_URL=https://ntfy.${SERVICE_DOMAIN:?required - the domain Traefik routes on}"
+      - NTFY_LISTEN_HTTP=:80
+      - NTFY_BEHIND_PROXY=true
+      - NTFY_CACHE_FILE=/var/cache/ntfy/cache.db
+      - NTFY_CACHE_DURATION=12h
+      - NTFY_ATTACHMENT_CACHE_DIR=/var/cache/ntfy/attachments
+      # Users and ACLs. It sits under the cache directory to keep this to one
+      # volume; despite the path, deleting it loses every account.
+      - NTFY_AUTH_FILE=/var/cache/ntfy/user.db
+      # Anyone who can reach Traefik can read and post to any topic. That
+      # matches upstream's default and suits a LAN-only deployment. Tightening
+      # it means `deny-all` here plus `ntfy user add` and `ntfy access` runs
+      # against the container, so it is a deliberate second step rather than
+      # something to switch on blind.
+      - NTFY_AUTH_DEFAULT_ACCESS=read-write
+    volumes:
+      # Message cache, attachments and the user database. Nothing on the host
+      # reads it.
+      - "ntfy-cache:/var/cache/ntfy"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 http://localhost:80/v1/health -O - | grep -Eo '\"healthy\"\\s*:\\s*true' || exit 1"]
+      start_period: 40s
+      timeout: 10s
+      interval: 60s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ntfy.entrypoints=http"
+      - "traefik.http.routers.ntfy.rule=Host(`ntfy.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.middlewares.ntfy-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.ntfy.middlewares=ntfy-https-redirect"
+      - "traefik.http.routers.ntfy-secure.entrypoints=https"
+      - "traefik.http.routers.ntfy-secure.rule=Host(`ntfy.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.routers.ntfy-secure.tls=true"
+      - "traefik.http.routers.ntfy-secure.service=ntfy"
+      - "traefik.http.services.ntfy.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  ntfy-cache:
