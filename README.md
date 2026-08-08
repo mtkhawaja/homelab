@@ -402,6 +402,23 @@ Ghost plus MySQL. Only Ghost is routed. Ghost stores absolute URLs in post conte
 - [compose.yaml](./services/homarr/compose.yaml)
 - [Homarr - Installation Instructions](https://homarr.dev/docs/getting-started/installation/docker)
 
+### Immich
+
+> Immich is a high performance self-hosted photo and video management solution.
+
+Four containers: server, machine learning, a bundled Postgres and a Valkey queue. The database is
+not `services/postgres` — Immich requires the VectorChord and pgvecto.rs extensions for search
+embeddings. Tags float: the server and machine learning images publish no `latest`, so they track
+upstream's `release` tag, and the database image has no floating tag at all, since every tag encodes
+the Postgres major plus the exact extension versions. Everything except the server stays on the
+stack's private network, and all four are excluded from Watchtower because a release can run
+irreversible database migrations.
+
+- [compose.yaml](./services/immich/compose.yaml)
+- [Immich - Quick start](https://docs.immich.app/overview/quick-start/)
+- [Immich - Docker Compose install](https://docs.immich.app/install/docker-compose)
+- [Immich - Environment variables](https://docs.immich.app/install/environment-variables)
+
 ### Jenkins
 
 > The leading open source automation server
