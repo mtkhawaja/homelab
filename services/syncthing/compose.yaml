@@ -1,0 +1,97 @@
+# Documentation Reference:
+# https://docs.syncthing.net/
+# https://github.com/syncthing/syncthing/blob/main/README-Docker.md
+#
+# Adapted from:
+# https://github.com/syncthing/syncthing/blob/main/README-Docker.md (compose example)
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY - host path for the synced folders
+#
+# Continuous peer-to-peer sync between machines. It is the complement to rclone
+# rather than a competitor: Syncthing speaks to no cloud provider at all, and
+# rclone does not sync continuously.
+#
+# Upstream uses `network_mode: host` and is explicit that Docker's bridge
+# "prevents local IP addresses from being discovered". This runs on `proxy`
+# anyway, because host mode would take the Traefik labels with it, and because
+# the rule in this repo is that host mode is for reading the host's own
+# networking rather than for convenience.
+#
+# What that actually costs is local discovery, and only local discovery. The
+# 21027/udp broadcast is deliberately not published: published ports forward
+# unicast to the host address, so LAN broadcasts never reach a bridged
+# container and publishing it would imply a discovery that does not work.
+# Devices are therefore added by device ID, which is the normal way to pair
+# Syncthing anyway. Global discovery and relays are unaffected, and 22000 below
+# is what remote devices actually connect to. If pairing over the LAN turns out
+# to matter more than routing the UI through Traefik, host mode is the escape
+# hatch -- the same trade dashdot's header describes.
+#
+# STGUIADDRESS is already 0.0.0.0:8384 in the image, so the UI binds every
+# interface without being told to. Upstream's `STGUIADDRESS=` empty override is
+# for host mode, where binding everything would expose the UI on the LAN
+# directly, and setting it here would hide the UI from Traefik.
+#
+# The image ships its own healthcheck against /rest/noauth/health, so none is
+# declared below.
+#
+# The entrypoint chowns only $HOME, and not recursively, which is why the state
+# volume is mounted at /var/syncthing rather than at /var/syncthing/config: a
+# volume one level deeper would be created root-owned, never chowned, and
+# Syncthing would fail to write its config as uid 1000. The bind mount below is
+# nested inside it and is not chowned either, so
+# $BASE_VOLUME_DIRECTORY/syncthing/data has to be owned by 1000:1000 on the
+# host before the first start.
+#
+# The UI has no password until one is set. Anyone who reaches Traefik can add
+# folders and devices until then, so set one under Actions - Settings on the
+# first visit.
+services:
+  syncthing:
+    image: "syncthing/syncthing:latest"
+    container_name: "syncthing"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    ports:
+      # The sync protocol itself. Unlike the HTTP services here this has to be
+      # reachable from the LAN and from other machines directly, since Traefik
+      # proxies neither raw TCP on this port nor QUIC.
+      - "22000:22000/tcp"
+      - "22000:22000/udp"
+    environment:
+      - TZ=America/New_York
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      # Config, the TLS keys and the device identity. Losing it changes this
+      # machine's device ID and every peer has to re-accept it.
+      - "syncthing-config:/var/syncthing"
+      # The synced folders. A bind mount because the whole point is that these
+      # files are reachable on the host, over Samba and by the other services,
+      # rather than sealed inside a Docker volume.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the synced folders}/syncthing/data:/var/syncthing/data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.syncthing.entrypoints=http"
+      - "traefik.http.routers.syncthing.rule=Host(`syncthing.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.middlewares.syncthing-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.syncthing.middlewares=syncthing-https-redirect"
+      - "traefik.http.routers.syncthing-secure.entrypoints=https"
+      - "traefik.http.routers.syncthing-secure.rule=Host(`syncthing.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.routers.syncthing-secure.tls=true"
+      - "traefik.http.routers.syncthing-secure.service=syncthing"
+      - "traefik.http.services.syncthing.loadbalancer.server.port=8384"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  syncthing-config:

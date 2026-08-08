@@ -774,6 +774,20 @@ upgrade migrates the database and cannot be rolled back.
 - [compose.yaml](./services/stirling-pdf/compose.yaml)
 - [Stirling PDF - Production deployment guide](https://docs.stirlingpdf.com/Production-Deployment-Guide#docker-compose-setup)
 
+### Syncthing
+
+> Syncthing is a continuous file synchronization program that synchronizes files between two or more computers in real time.
+
+The complement to rclone rather than a competitor: continuous and peer-to-peer, but it speaks to no
+cloud provider. Runs on `proxy` rather than upstream's `network_mode: host`, so the UI routes
+through Traefik; the cost is LAN discovery, since broadcasts never reach a bridged container, so
+devices are paired by device ID. 22000 is published for the sync protocol itself. The UI has no
+password until one is set under Actions → Settings.
+
+- [compose.yaml](./services/syncthing/compose.yaml)
+- [Syncthing - Documentation](https://docs.syncthing.net/)
+- [Syncthing - Docker](https://github.com/syncthing/syncthing/blob/main/README-Docker.md)
+
 ### Traefik
 
 > Traefik is the leading open-source reverse proxy and load balancer for HTTP and TCP-based applications that is easy, dynamic and full-featured.
