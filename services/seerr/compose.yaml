@@ -1,0 +1,73 @@
+# Documentation Reference:
+# https://seerr.dev/
+# https://docs.seerr.dev/getting-started/docker/
+#
+# Request management and media discovery for Plex, Jellyfin and Emby. Seerr is
+# the successor to Overseerr and Jellyseerr, both of which are deprecated; the
+# image and every config key were renamed, so migrating from either is not just
+# a tag bump. See https://docs.seerr.dev/migration-guide/.
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
+#
+# Upstream publishes 5055:5055, dropped here since Traefik is the only ingress.
+# PORT is still set explicitly so the value the app binds and the value in the
+# Traefik label cannot drift apart.
+#
+# Plex is on `proxy` too, so Seerr reaches it as `plex` on 32400 when setting up
+# the server connection -- no host address needed.
+#
+# `init: true` is required rather than cosmetic. The image dropped its own init
+# process, so without one PID 1 is npm and zombie processes are never reaped.
+#
+# The image runs as its own `node` user, uid 1000, and ships /app/config owned
+# by it. Docker seeds a new named volume from the image directory, ownership
+# included, so the volume comes up writable and this needs no init container to
+# chown it -- unlike audiobookshelf, whose image has no such directory. A bind
+# mount here would need a `chown -R 1000:1000` on the host first.
+services:
+  seerr:
+    image: "ghcr.io/seerr-team/seerr:latest"
+    container_name: "seerr"
+    restart: "unless-stopped"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+      # Upstream's example ships `debug`, which is far noisier than a running
+      # instance needs.
+      - LOG_LEVEL=info
+      - PORT=5055
+    volumes:
+      # Settings, the SQLite database and the request history. Nothing on the
+      # host reads it.
+      - "seerr-config:/app/config"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5055/api/v1/settings/public || exit 1"]
+      start_period: 20s
+      timeout: 3s
+      interval: 15s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.seerr.entrypoints=http"
+      - "traefik.http.routers.seerr.rule=Host(`seerr.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.seerr-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.seerr.middlewares=seerr-https-redirect"
+      - "traefik.http.routers.seerr-secure.entrypoints=https"
+      - "traefik.http.routers.seerr-secure.rule=Host(`seerr.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.seerr-secure.tls=true"
+      - "traefik.http.routers.seerr-secure.service=seerr"
+      - "traefik.http.services.seerr.loadbalancer.server.port=5055"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  seerr-config:

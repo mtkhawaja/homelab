@@ -659,6 +659,19 @@ before the first start.
 - [Redis - Dockerhub](https://hub.docker.com/_/redis)
 - [Redis - ACL documentation](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/)
 
+### Seerr
+
+> Seerr is a free, open-source request management and media discovery tool that works seamlessly with
+> your Jellyfin, Plex, or Emby server.
+
+The successor to Overseerr and Jellyseerr, both deprecated; migrating from either renames the image
+and the config keys, so it is not a tag bump. Plex is on `proxy`, so Seerr reaches it as `plex` on
+32400 when configuring the server connection.
+
+- [compose.yaml](./services/seerr/compose.yaml)
+- [Seerr - Docker installation](https://docs.seerr.dev/getting-started/docker/)
+- [Seerr - Migration guide](https://docs.seerr.dev/migration-guide/)
+
 ### Speedtest Tracker
 
 > Speedtest Tracker is a self-hosted application that monitors the performance and uptime of your
