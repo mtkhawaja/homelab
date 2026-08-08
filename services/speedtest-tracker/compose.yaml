@@ -1,0 +1,71 @@
+# Documentation Reference:
+# https://github.com/alexjustesen/speedtest-tracker
+# https://docs.speedtest-tracker.dev/getting-started/installation/using-docker-compose
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN            - Traefik host rules, e.g. local.example.com
+#   SPEEDTEST_TRACKER_APP_KEY - Laravel encryption key, `base64:` prefix included.
+#                               Generate one with
+#                               echo "base64:$(openssl rand -base64 32)"
+#                               Rotating it makes existing encrypted values,
+#                               notification credentials among them, unreadable.
+#
+# Upstream offers sqlite, postgres and mysql. SQLite is used here, so this is a
+# single container with no bundled database: it stores results in /config
+# alongside the rest of the app state. The shared postgres on `proxy` is
+# deliberately not used -- nothing outside this stack reads speedtest results,
+# and no other service in this repo puts its application database there either.
+#
+# Upstream publishes 8080:80 and 8443:443. Both are dropped: Traefik is the only
+# ingress and terminates TLS itself, so the container's own HTTPS listener and
+# its /config/keys mount for custom certificates are unused.
+#
+# A LinuxServer image, so PUID/PGID are handled in the container: it starts as
+# root, chowns /config, then drops to that user. No init container is needed to
+# fix volume ownership, unlike audiobookshelf.
+#
+# Speeds are measured from inside a bridge network. That is fine for a
+# gigabit-class link, but if results come in noticeably under what the host
+# measures directly, `network_mode: host` is the escape hatch -- at the cost of
+# the Traefik labels, which need the proxy network.
+services:
+  speedtest-tracker:
+    image: "lscr.io/linuxserver/speedtest-tracker:latest"
+    container_name: "speedtest-tracker"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - DB_CONNECTION=sqlite
+      # Used to build links in notifications, so it is the address a browser
+      # reaches, not the container's own port.
+      - "APP_URL=https://speedtest-tracker.${SERVICE_DOMAIN:?required, see header}"
+      - "APP_KEY=${SPEEDTEST_TRACKER_APP_KEY:?required - Laravel encryption key, base64- prefix included}"
+    volumes:
+      # Application state and the SQLite database. Nothing on the host reads it.
+      - "speedtest-tracker-config:/config"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.speedtest-tracker.entrypoints=http"
+      - "traefik.http.routers.speedtest-tracker.rule=Host(`speedtest-tracker.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.speedtest-tracker-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.speedtest-tracker.middlewares=speedtest-tracker-https-redirect"
+      - "traefik.http.routers.speedtest-tracker-secure.entrypoints=https"
+      - "traefik.http.routers.speedtest-tracker-secure.rule=Host(`speedtest-tracker.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.speedtest-tracker-secure.tls=true"
+      - "traefik.http.routers.speedtest-tracker-secure.service=speedtest-tracker"
+      - "traefik.http.services.speedtest-tracker.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  speedtest-tracker-config:

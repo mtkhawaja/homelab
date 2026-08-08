@@ -659,6 +659,19 @@ before the first start.
 - [Redis - Dockerhub](https://hub.docker.com/_/redis)
 - [Redis - ACL documentation](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/)
 
+### Speedtest Tracker
+
+> Speedtest Tracker is a self-hosted application that monitors the performance and uptime of your
+> internet connection.
+
+Runs on SQLite, so it is a single container with no bundled database. `SPEEDTEST_TRACKER_APP_KEY` is
+required; generate it with `echo "base64:$(openssl rand -base64 32)"` and set it once, since rotating
+it makes already-encrypted values unreadable.
+
+- [compose.yaml](./services/speedtest-tracker/compose.yaml)
+- [Speedtest Tracker - GitHub](https://github.com/alexjustesen/speedtest-tracker)
+- [Speedtest Tracker - Docker Compose installation](https://docs.speedtest-tracker.dev/getting-started/installation/using-docker-compose)
+
 ### SonarQube
 
 > the code quality tool for better code
