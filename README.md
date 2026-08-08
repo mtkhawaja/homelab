@@ -690,6 +690,20 @@ OpenVPN.
 - [compose.yaml](./services/qbit/compose.yaml)
 - [binhex/arch-qbittorrentvpn - GitHub](https://github.com/binhex/arch-qbittorrentvpn)
 
+### rclone
+
+> rclone is a command-line program to sync files and directories to and from around 70 cloud storage providers.
+
+Serves two hostnames, the way Nexus does: `rclone.$SERVICE_DOMAIN` is the web GUI and
+`rclone-api.$SERVICE_DOMAIN` is the remote control API the browser calls directly. `rclone gui`
+refuses to put both on one port, and the split origins are why `--rc-allow-origin` is set. The way
+in is `/login?user=…&pass=…&url=https://rclone-api.$SERVICE_DOMAIN/`. `services/garage` is reachable
+as an S3 remote at `http://garage:3900`.
+
+- [compose.yaml](./services/rclone/compose.yaml)
+- [rclone - Documentation](https://rclone.org/docs/)
+- [rclone - Web GUI](https://rclone.org/gui/)
+
 ### Redis
 
 > The open source, in-memory data store used by millions of developers as a cache, vector database, document database, streaming engine, and message broker.

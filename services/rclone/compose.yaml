@@ -1,0 +1,107 @@
+# Documentation Reference:
+# https://rclone.org/docs/
+# https://rclone.org/gui/
+# https://rclone.org/install/#docker
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY - host path exposed to rclone as /data
+#   RCLONE_GUI_USER       - login for the web GUI and the remote control API
+#   RCLONE_GUI_PASS       - password for that login
+#
+# Sync and copy between local paths and around 70 cloud backends, with
+# rsync-shaped semantics. services/garage is one of them, reachable as an S3
+# remote at http://garage:3900 over `proxy`.
+#
+# Two hostnames, the way nexus has two. `rclone gui` serves the GUI and the
+# remote control API on separate listeners and refuses to share one port -- it
+# exits with "address already in use" if both are pointed at the same one. The
+# browser talks to the API directly rather than through the GUI server, so the
+# API needs its own route rather than being kept internal.
+#
+#   rclone.$SERVICE_DOMAIN      - the web GUI
+#   rclone-api.$SERVICE_DOMAIN  - the remote control API the GUI calls
+#
+# Because those are different origins, --rc-allow-origin is required or every
+# call the GUI makes is blocked by CORS.
+#
+# The GUI is told which API to talk to at login, as a query parameter, so the
+# way in is this URL. It is stable, since the credentials are fixed below rather
+# than generated per start:
+#
+#   https://rclone.$SERVICE_DOMAIN/login?user=$RCLONE_GUI_USER&pass=$RCLONE_GUI_PASS&url=https://rclone-api.$SERVICE_DOMAIN/
+#
+# The GUI is embedded in the binary at build time as of rclone 1.74, so nothing
+# is fetched at runtime. The older `rcd --rc-web-gui` serves both on one port,
+# which would be a single Traefik router, but it downloads the previous React
+# GUI from GitHub on first start. That runtime dependency is not worth the saved
+# router.
+#
+# --no-auth is never appropriate here. This process can read and write every
+# configured remote and everything under /data, which is the same trust level as
+# portainer.
+#
+# The image runs as root and ships an empty /data, so both mounts below are
+# writable as-is and no init container is needed.
+services:
+  rclone:
+    image: "rclone/rclone:latest"
+    container_name: "rclone"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+      # Default would be /root/.config/rclone/rclone.conf. Pointed at the volume
+      # below so remotes added through the GUI survive a recreate.
+      - RCLONE_CONFIG=/config/rclone.conf
+    command:
+      - "gui"
+      - "--addr=:5572"
+      - "--api-addr=:5573"
+      - "--user=${RCLONE_GUI_USER:?required - login for the rclone web GUI}"
+      - "--pass=${RCLONE_GUI_PASS:?required - password for RCLONE_GUI_USER}"
+      - "--rc-allow-origin=https://rclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}"
+      # There is no browser in the container to open.
+      - "--no-open-browser"
+    volumes:
+      # rclone.conf, which holds the cloud provider credentials. Nothing on the
+      # host reads it, and it should not land anywhere near git.
+      - "rclone-config:/config"
+      # The host tree rclone exists to move. Kept as a bind mount because these
+      # are the same media and data trees the other services and Samba use --
+      # a named volume here would leave rclone with nothing to transfer.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path exposed to rclone as /data}:/data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      # Web GUI
+      - "traefik.http.routers.rclone.entrypoints=http"
+      - "traefik.http.routers.rclone.rule=Host(`rclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.middlewares.rclone-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.rclone.middlewares=rclone-https-redirect"
+      - "traefik.http.routers.rclone-secure.entrypoints=https"
+      - "traefik.http.routers.rclone-secure.rule=Host(`rclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.routers.rclone-secure.tls=true"
+      - "traefik.http.routers.rclone-secure.service=rclone"
+      - "traefik.http.services.rclone.loadbalancer.server.port=5572"
+      # Remote control API, which the browser calls directly
+      - "traefik.http.routers.rclone-api.entrypoints=http"
+      - "traefik.http.routers.rclone-api.rule=Host(`rclone-api.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.middlewares.rclone-api-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.rclone-api.middlewares=rclone-api-https-redirect"
+      - "traefik.http.routers.rclone-api-secure.entrypoints=https"
+      - "traefik.http.routers.rclone-api-secure.rule=Host(`rclone-api.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.routers.rclone-api-secure.tls=true"
+      - "traefik.http.routers.rclone-api-secure.service=rclone-api"
+      - "traefik.http.services.rclone-api.loadbalancer.server.port=5573"
+networks:
+  proxy:
+    external: true
+volumes:
+  rclone-config:
