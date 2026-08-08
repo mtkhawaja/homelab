@@ -1,6 +1,7 @@
 # Documentation Reference:
 # https://github.com/alexjustesen/speedtest-tracker
 # https://docs.speedtest-tracker.dev/getting-started/installation/using-docker-compose
+# https://docs.speedtest-tracker.dev/getting-started/environment-variables#speed-tests
 #
 # Required variables. Supply them however suits: common.env, a second
 # --env-file, the shell environment, or Portainer's stack variables. Guarded,
@@ -45,6 +46,13 @@ services:
       - PGID=1000
       - TZ=America/New_York
       - DB_CONNECTION=sqlite
+      # Three tests a day, interpreted in TZ above. Upstream defaults to hourly,
+      # which is more samples than a link this stable needs. 04:10 is the
+      # off-peak baseline, 12:10 covers the working day, 20:10 lands in the
+      # evening peak when the ISP is most congested -- the contrast between the
+      # first and last is the whole point. Minute 10 keeps the runs off the
+      # top of the hour, when everyone else's cron hits the Ookla servers.
+      - "SPEEDTEST_SCHEDULE=10 4,12,20 * * *"
       # Used to build links in notifications, so it is the address a browser
       # reaches, not the container's own port.
       - "APP_URL=https://speedtest-tracker.${SERVICE_DOMAIN:?required, see header}"
