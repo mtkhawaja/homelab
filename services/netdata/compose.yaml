@@ -1,0 +1,114 @@
+# Documentation Reference:
+# https://learn.netdata.cloud/docs/netdata-agent/installation/docker
+# https://learn.netdata.cloud/docs/collecting-metrics/storage/zfs-pools
+#
+# Adapted from:
+# https://learn.netdata.cloud/docs/netdata-agent/installation/docker (compose example)
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
+#
+# Added for ZFS pool visibility, which dashdot cannot do at all: its storage
+# widget matches filesystems onto physical block devices, and a pool's device is
+# the pool name rather than a /dev node, so there is nothing to match. Netdata's
+# zfspool collector reports pool and per-vdev health (online, degraded, faulted,
+# offline, unavail, removed, suspended), capacity and fragmentation, and ships
+# alarms for capacity, degraded and faulted pools. dashdot is left running for
+# now; if this earns its keep, dashdot is the one to retire.
+#
+# The collector shells out to `zpool`, which the image does not carry.
+# NETDATA_EXTRA_DEB_PACKAGES is upstream's escape hatch: the entrypoint
+# apt-installs it at container start, so the package matches the Debian base
+# rather than needing an image build. The cost is that every start does an
+# apt-get, so a cold start needs working DNS and internet and is slower than
+# the rest of the stack.
+#
+# No collector config is needed. The stock zfspool.conf ships three jobs, for
+# /usr/bin/zpool, /usr/sbin/zpool (where Debian puts it) and /sbin/zpool; the
+# ones whose binary is absent simply never start. Pools are discovered by
+# running `zpool list`, so pool names are never written down here.
+#
+# /dev/zfs is what `zpool` talks to. OpenZFS permits the read-only ioctls
+# behind `zpool list` unprivileged, which matters because Netdata runs this
+# collector as its own user rather than as root.
+#
+# Upstream uses `network_mode: host`. That is dropped: it would take the Traefik
+# labels with it, and host network metrics come from /host/proc/net either way,
+# so bridging to `proxy` costs nothing. `pid: host` is kept, since process-level
+# metrics need it -- the same reason node_exporter in the plg stack has it.
+#
+# no-new-privileges is absent deliberately, as on dashdot. Netdata's privileged
+# collectors go through ndsudo, a setuid helper, which is exactly what that
+# option blocks. SYS_PTRACE and SYS_ADMIN are upstream's list for local service
+# discovery and container network interface mapping.
+services:
+  netdata:
+    image: "netdata/netdata:latest"
+    container_name: "netdata"
+    restart: "unless-stopped"
+    hostname: "netdata.${SERVICE_DOMAIN:?required - the domain Traefik routes on}"
+    pid: "host"
+    cap_add:
+      - SYS_PTRACE
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    devices:
+      # Lets `zpool list` reach the kernel module. Without it the zfspool
+      # collector starts and then reports nothing.
+      - "/dev/zfs:/dev/zfs"
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+      # Installs the `zpool` binary at container start; see header.
+      - NETDATA_EXTRA_DEB_PACKAGES=zfsutils-linux
+      # Netdata phones home with anonymous usage statistics by default.
+      - DISABLE_TELEMETRY=1
+    volumes:
+      # Collector and alarm overrides. Empty until something is customised, and
+      # nothing on the host reads it.
+      - "netdata-config:/etc/netdata"
+      # Registry, health state and the agent's own identity.
+      - "netdata-lib:/var/lib/netdata"
+      # The metrics database. Losing it loses history, not configuration.
+      - "netdata-cache:/var/cache/netdata"
+      # Everything below is the host being measured, so none of it converts to a
+      # named volume. rslave is what makes mounts appearing after the container
+      # starts -- a pool imported late in boot, or any export/import cycle --
+      # visible instead of silently missing.
+      - "/:/host/root:ro,rslave"
+      - "/proc:/host/proc:ro"
+      - "/sys:/host/sys:ro"
+      - "/var/log:/host/var/log:ro"
+      # Resolves uids to names in the per-user breakdown.
+      - "/etc/passwd:/host/etc/passwd:ro"
+      - "/etc/group:/host/etc/group:ro"
+      - "/etc/os-release:/host/etc/os-release:ro"
+      # Per-container CPU, memory and network. Read-only: Netdata only queries
+      # the API, and a writable socket would be root on the host.
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      # systemd unit state.
+      - "/run/dbus:/run/dbus:ro"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.netdata.entrypoints=http"
+      - "traefik.http.routers.netdata.rule=Host(`netdata.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.middlewares.netdata-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.netdata.middlewares=netdata-https-redirect"
+      - "traefik.http.routers.netdata-secure.entrypoints=https"
+      - "traefik.http.routers.netdata-secure.rule=Host(`netdata.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.routers.netdata-secure.tls=true"
+      - "traefik.http.routers.netdata-secure.service=netdata"
+      - "traefik.http.services.netdata.loadbalancer.server.port=19999"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  netdata-config:
+  netdata-lib:
+  netdata-cache:

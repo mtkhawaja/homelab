@@ -507,6 +507,19 @@ the editor point somewhere unreachable.
 - [n8n - Docker installation](https://docs.n8n.io/hosting/installation/docker/)
 - [n8n - Environment variables](https://docs.n8n.io/hosting/configuration/environment-variables/)
 
+### Netdata
+
+> Netdata collects metrics per second and presents them in low-latency dashboards.
+
+Added for ZFS pool visibility, which dashdot cannot provide: its zfspool collector reports pool and
+per-vdev health, capacity and fragmentation, and ships alarms for degraded and faulted pools. Pools
+are auto-discovered, so no pool names are configured. `NETDATA_EXTRA_DEB_PACKAGES` installs the
+`zpool` binary at container start, which means a cold start needs internet access.
+
+- [compose.yaml](./services/netdata/compose.yaml)
+- [Netdata - Docker installation](https://learn.netdata.cloud/docs/netdata-agent/installation/docker)
+- [Netdata - ZFS pools collector](https://learn.netdata.cloud/docs/collecting-metrics/storage/zfs-pools)
+
 ### Nexus Repository Manager
 
 > Nexus by Sonatype is a repository manager that organizes, stores and distributes artifacts needed for development.
