@@ -282,6 +282,18 @@ journalctl -u docker-prune.service -n 50
 
 ## Services
 
+### Audiobookshelf
+
+> Self-hosted audiobook and podcast server.
+
+The audiobook and podcast libraries stay bind mounts so the same trees remain reachable over Samba
+and FTP. The container is pinned to uid 1000 so downloaded podcast episodes are not written as root,
+which means its two named volumes need a one-time chown before the first start; see the compose file
+header.
+
+- [compose.yaml](./services/audiobookshelf/compose.yaml)
+- [Audiobookshelf - Docker install](https://www.audiobookshelf.org/docs/documentation/install/docker/)
+
 ### Beszel
 
 > Simple, lightweight server monitoring with Docker stats, historical data, and alerts.

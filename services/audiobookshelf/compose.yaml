@@ -1,0 +1,73 @@
+# Documentation Reference:
+# https://www.audiobookshelf.org/docs/documentation/install/docker/
+# https://github.com/advplyr/audiobookshelf/blob/master/docker-compose.yml
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY - host path for the two library bind mounts
+#
+# Upstream publishes 13378:80 and mounts all four paths relatively. The port is
+# dropped, since Traefik is the only ingress, and the two state paths become
+# named volumes.
+#
+# The image runs as root and has no PUID/PGID handling of its own, so it is
+# pinned to 1000:1000 to match the ownership of the shared library trees.
+# Audiobookshelf writes into them -- downloaded podcast episodes land in the
+# podcast folder -- and as root those files would be undeletable over Samba and
+# FTP. The cost is that the two named volumes have to be created and chowned
+# once before the first start, because Docker creates an empty volume root-owned
+# and a non-root container cannot then write to it. Run this once, before the
+# first `up`, rather than a plain `docker run`: it creates and chowns the
+# project's own volumes without having to name them, which matters because the
+# names are namespaced by the project.
+#
+#   docker compose \
+#     --env-file "./services/common.env" \
+#     --file "./services/audiobookshelf/compose.yaml" \
+#     run --rm --user root --entrypoint sh audiobookshelf \
+#     -c 'chown 1000:1000 /config /metadata'
+services:
+  audiobookshelf:
+    image: "ghcr.io/advplyr/audiobookshelf:latest"
+    container_name: "audiobookshelf"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    # Owns the files written into the library bind mounts; see header.
+    user: "1000:1000"
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+    volumes:
+      # SQLite database. Upstream requires it on local disk rather than over the
+      # network, which a named volume on the docker host satisfies.
+      - "audiobookshelf-config:/config"
+      # Covers, author images, logs and backups. Nothing on the host reads them.
+      - "audiobookshelf-metadata:/metadata"
+      # Libraries stay bind mounts: these are the same media trees reachable
+      # over Samba and FTP, and are filled from the host rather than through
+      # Audiobookshelf.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the libraries}/audiobookshelf/data/audiobooks:/audiobooks"
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the libraries}/audiobookshelf/data/podcasts:/podcasts"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.audiobookshelf.entrypoints=http"
+      - "traefik.http.routers.audiobookshelf.rule=Host(`audiobookshelf.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.middlewares.audiobookshelf-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.audiobookshelf.middlewares=audiobookshelf-https-redirect"
+      - "traefik.http.routers.audiobookshelf-secure.entrypoints=https"
+      - "traefik.http.routers.audiobookshelf-secure.rule=Host(`audiobookshelf.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.audiobookshelf-secure.tls=true"
+      - "traefik.http.routers.audiobookshelf-secure.service=audiobookshelf"
+      - "traefik.http.services.audiobookshelf.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  audiobookshelf-config:
+  audiobookshelf-metadata:
