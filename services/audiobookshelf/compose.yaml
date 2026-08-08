@@ -17,19 +17,30 @@
 # pinned to 1000:1000 to match the ownership of the shared library trees.
 # Audiobookshelf writes into them -- downloaded podcast episodes land in the
 # podcast folder -- and as root those files would be undeletable over Samba and
-# FTP. The cost is that the two named volumes have to be created and chowned
-# once before the first start, because Docker creates an empty volume root-owned
-# and a non-root container cannot then write to it. Run this once, before the
-# first `up`, rather than a plain `docker run`: it creates and chowns the
-# project's own volumes without having to name them, which matters because the
-# names are namespaced by the project.
+# FTP.
 #
-#   docker compose \
-#     --env-file "./services/common.env" \
-#     --file "./services/audiobookshelf/compose.yaml" \
-#     run --rm --user root --entrypoint sh audiobookshelf \
-#     -c 'chown 1000:1000 /config /metadata'
+# Docker creates an empty named volume owned by root, which a container running
+# as 1000 then cannot write to: the server dies in a loop on
+# `EACCES: mkdir '/metadata/logs'`. The init service below fixes the ownership
+# and exits before the server starts. It is a container rather than a documented
+# `chown` step because the volume names are namespaced by the project, so a step
+# run by hand targets the wrong volumes under Portainer, where the stack name
+# becomes the project name.
 services:
+  # One-shot. Runs as root, chowns the two volumes, exits. Idempotent, so it
+  # runs on every `up` and not just the first.
+  audiobookshelf-init:
+    image: "ghcr.io/advplyr/audiobookshelf:latest"
+    container_name: "audiobookshelf-init"
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    user: "0:0"
+    entrypoint: ["chown", "1000:1000", "/config", "/metadata"]
+    volumes:
+      - "audiobookshelf-config:/config"
+      - "audiobookshelf-metadata:/metadata"
+
   audiobookshelf:
     image: "ghcr.io/advplyr/audiobookshelf:latest"
     container_name: "audiobookshelf"
@@ -38,6 +49,9 @@ services:
       - no-new-privileges:true
     # Owns the files written into the library bind mounts; see header.
     user: "1000:1000"
+    depends_on:
+      audiobookshelf-init:
+        condition: service_completed_successfully
     networks:
       - "proxy"
     environment:
