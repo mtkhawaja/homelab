@@ -13,6 +13,8 @@
 #   RCLONE_GUI_PASS       - password for that login, A-Za-z0-9 only
 #   RCLONE_BASIC_AUTH     - the same pair as user:bcrypt-hash, for Traefik:
 #                           docker run --rm httpd:alpine htpasswd -nbB <user> '<password>'
+#                           Double every $ in the hash where this is set; see
+#                           the note on the basicauth label below.
 #
 # Sync and copy between local paths and around 70 cloud backends, with
 # rsync-shaped semantics. services/garage is one of them, reachable as an S3
@@ -160,12 +162,23 @@ services:
       #
       # The value is user:bcrypt-hash, from:
       #   docker run --rm httpd:alpine htpasswd -nbB <user> '<password>'
-      # It is passed as a variable rather than pasted in: a literal $ in a label
-      # has to be doubled to $$ to survive Compose interpolation, and a bcrypt
-      # hash is full of them, while a $ arriving from a variable's value is not
-      # reinterpreted. The credentials behind the hash have to match
-      # RCLONE_GUI_USER and RCLONE_GUI_PASS, or Traefik will accept the request
-      # and rclone will then reject it.
+      #
+      # EVERY $ IN THAT HASH HAS TO BE DOUBLED WHERE THE VARIABLE IS SET:
+      #
+      #   RCLONE_BASIC_AUTH=user:$$2y$$05$$rest-of-the-hash
+      #
+      # Compose interpolates inside env-file values, so a single $ makes it eat
+      # the rest of the hash as a variable name. The damage is silent and does
+      # not look like truncation: the label ends up something like
+      # user:$2y$05 or user:$2y$05.AOKd..., Traefik computes against that, and
+      # every login is rejected while the browser still prompts normally. A
+      # correct label is the user, a colon, then exactly 60 characters.
+      # Shell environment variables do not need this; env files and Portainer
+      # stack variables do, which is the path this repo actually deploys by.
+      #
+      # The credentials behind the hash have to match RCLONE_GUI_USER and
+      # RCLONE_GUI_PASS, or Traefik will accept the request and rclone will then
+      # reject it.
       - "traefik.http.middlewares.rclone-auth.basicauth.users=${RCLONE_BASIC_AUTH:?required - user:bcrypt-hash pair for the proxy login}"
       # Rewrites a bare visit to the root into the login page. Only the URL is
       # carried: the credentials come from the browser's own basic auth session
