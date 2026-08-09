@@ -61,7 +61,10 @@
 # bridging to `proxy`. Upstream requires Postgres 13 or newer.
 services:
   database:
-    image: "postgres:17"
+    # Upstream's compose pins 17. Bumped to match paperless and the rest of the
+    # repo; Coder documents a minimum of 13 and no maximum, though it does not
+    # name 18 as tested either.
+    image: "postgres:18"
     container_name: "coder-database"
     restart: "unless-stopped"
     security_opt:
@@ -73,7 +76,11 @@ services:
       POSTGRES_USER: "${CODER_DB_USER:?required - Postgres role owning the coder database}"
       POSTGRES_PASSWORD: "${CODER_DB_PASSWORD:?required - password for CODER_DB_USER}"
     volumes:
-      - "coder-database-data:/var/lib/postgresql/data"
+      # postgres:18 declares its volume at /var/lib/postgresql, one level above
+      # PGDATA at /var/lib/postgresql/18/docker. Mounting the old
+      # /var/lib/postgresql/data would leave the real data directory outside the
+      # volume and lose the database on every recreate.
+      - "coder-database-data:/var/lib/postgresql"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d coder"]
       interval: 5s
