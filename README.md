@@ -387,6 +387,21 @@ real domain, so it is not kept in git.
 - [Design and setup notes](./services/dns/TAILSCALE.md)
 - [CoreDNS - Manual](https://coredns.io/manual/toc/)
 
+### Excalidraw
+
+> Excalidraw is a virtual whiteboard for sketching hand-drawn like diagrams.
+
+A static nginx build, so one container with no database, no volumes and no environment: drawings live
+in the browser's `localStorage`, and clearing site data loses them. Note that the published image has
+Excalidraw's own endpoints compiled into the bundle — live collaboration, share links, the library
+browser and the AI features all call out to the public service. Drawing locally stays local; those
+features do not. Repointing them means building a custom image, since Vite inlines the URLs at build
+time and no runtime override exists.
+
+- [compose.yaml](./services/excalidraw/compose.yaml)
+- [Excalidraw - GitHub](https://github.com/excalidraw/excalidraw)
+- [Excalidraw - Dockerhub](https://hub.docker.com/r/excalidraw/excalidraw)
+
 ### FTP Server
 
 > A very small and simple Docker image running an FTP server.

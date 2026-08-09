@@ -1,0 +1,66 @@
+# Documentation Reference:
+# https://excalidraw.com/
+# https://github.com/excalidraw/excalidraw
+# https://hub.docker.com/r/excalidraw/excalidraw
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
+#
+# A whiteboard. The image is a static build served by nginx, so this is one
+# container with no database, no volumes and no environment of its own: drawings
+# live in the browser's localStorage, not on the server. Nothing here to back up,
+# and clearing site data loses the scenes.
+#
+# WHAT STILL LEAVES THE NETWORK. The frontend is built with Vite, which inlines
+# its endpoints at build time, and the published image has Excalidraw's own
+# infrastructure baked into the bundle. Checked by grepping the shipped assets:
+#
+#   oss-collab.excalidraw.com                 live collaboration websocket
+#   json.excalidraw.com/api/v2/               shareable-link storage
+#   excalidraw-room-persistence.firebaseio.com  collaboration persistence
+#   oss-ai.excalidraw.com                     text-to-diagram and diagram-to-code
+#   libraries.excalidraw.com                  the library browser
+#
+# So drawing locally is entirely local, but "Live collaboration", "Share link"
+# and the AI features call out to the public service. Scenes sent that way are
+# end-to-end encrypted, and they still leave the LAN.
+#
+# There is no runtime override for this. The image's entrypoint runs nginx's
+# stock 20-envsubst-on-templates.sh, which substitutes only
+# /etc/nginx/templates/*.template and never touches the built javascript. The
+# VITE_APP_WS_SERVER_URL and VITE_APP_BACKEND_V2_* variables are build-time
+# only, so pointing collaboration at a self-hosted excalidraw-room means
+# building a custom image. This repo has no build step, so that is deliberately
+# not attempted here; run it air-gapped from those features instead, or accept
+# them.
+#
+# The image ships a healthcheck against localhost, so none is declared below.
+services:
+  excalidraw:
+    image: "excalidraw/excalidraw:latest"
+    container_name: "excalidraw"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.excalidraw.entrypoints=http"
+      - "traefik.http.routers.excalidraw.rule=Host(`excalidraw.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.middlewares.excalidraw-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.excalidraw.middlewares=excalidraw-https-redirect"
+      - "traefik.http.routers.excalidraw-secure.entrypoints=https"
+      - "traefik.http.routers.excalidraw-secure.rule=Host(`excalidraw.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.routers.excalidraw-secure.tls=true"
+      - "traefik.http.routers.excalidraw-secure.service=excalidraw"
+      - "traefik.http.services.excalidraw.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
