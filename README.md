@@ -699,13 +699,14 @@ OpenVPN.
 
 > rclone is a command-line program to sync files and directories to and from around 70 cloud storage providers.
 
-Serves two hostnames, the way Nexus does: `rclone.$SERVICE_DOMAIN` is the web GUI and
-`rclone-api.$SERVICE_DOMAIN` is the remote control API the browser calls directly. `rclone gui`
-refuses to put both on one port, and the split origins are why `--rc-allow-origin` is set. The GUI
-learns the API address only from a `url=` query parameter and its login form has no field for it, so
-a `redirectregex` middleware rewrites the bare hostname to `/login?url=…` — without it the root just
-reports "URL is not configured". `services/garage` is reachable as an S3 remote at
-`http://garage:3900`.
+One hostname, two ports behind it: the GUI on `rclone.$SERVICE_DOMAIN` and the remote control API on
+`/api` of the same host, via `--rc-baseurl`. `rclone gui` refuses to put both on one port, and the
+browser calls the API directly, so it cannot stay internal — but sharing an origin avoids a second
+DNS record and certificate, and removes CORS entirely. The GUI learns the API address only from a
+`url=` query parameter and its login form has no field for it, so a `redirectregex` middleware
+rewrites the bare hostname to `/login?url=…&user=…&pass=…`; all three are needed, because the GUI
+auto-connects the moment any one of them is present. `services/garage` is reachable as an S3 remote
+at `http://garage:3900`.
 
 - [compose.yaml](./services/rclone/compose.yaml)
 - [rclone - Documentation](https://rclone.org/docs/)
