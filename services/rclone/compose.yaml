@@ -36,43 +36,37 @@
 # rclone serves the prefix itself because of --rc-baseurl, so no stripprefix
 # middleware is involved.
 #
-# The GUI learns which API to call only from a url= query parameter, and its
-# login form has fields for the user and password but none for the URL, so the
-# bare hostname reports "URL is not configured. Start the GUI launcher again."
-# with nowhere to type an address. The redirectregex middleware rewrites the
-# root to the login page with all three parameters.
+# FIRST VISIT ON A NEW BROWSER GOES HERE, not to the bare hostname:
 #
-# url and user, deliberately without the password. The GUI treats the presence
-# of any one of the three as "connect now" and submits immediately rather than
-# waiting for the form, so the combination matters:
+#   https://rclone.$SERVICE_DOMAIN/login?url=https%3A%2F%2Frclone.$SERVICE_DOMAIN%2Fapi%2F&user=$RCLONE_GUI_USER
 #
-#   url alone       - user and pass are both empty, which the client considers
-#                     consistent, so it connects unauthenticated, takes a 401,
-#                     and the auth handler runs
-#                     window.location.replace("/login?reason=auth"). That is a
-#                     full page load, which discards the URL it was just given,
-#                     since the store only persists after a successful connect.
-#                     The result is the same "URL is not configured" the bare
-#                     hostname gives.
-#   url and user    - the client rejects the asymmetry itself with "User and
-#                     password must both be provided". That check throws without
-#                     the auth-failure flag, so there is no reload: the URL and
-#                     user stay filled in and the password field is waiting.
-#   all three       - connects with no prompt at all, which also means Traefik
-#                     hands the password to whoever loads the page.
+# It prompts for the password, and after one successful connect the values live
+# in the browser's localStorage and the bare hostname works on its own from then
+# on. Only a new browser, a private window or cleared site data needs the URL
+# again.
 #
-# The middle one is what is configured. Adding pass= would make the password
-# part of a redirect served to every visitor, so it would reach the Location
-# header, the container labels and Traefik's access log, and anyone who could
-# reach the hostname would be logged in automatically -- for a process that can
-# read and write every configured remote and all of /data.
+# The reason is upstream: `rclone gui` is built as a local launcher that opens
+# your own browser with a generated token, so the GUI takes its API address only
+# from a url= query parameter and its login form has fields for the user and
+# password but none for the URL. Served from a fixed hostname there is nowhere
+# to type an address, and the bare root reports "URL is not configured. Start
+# the GUI launcher again." A redirectregex middleware used to paper over this;
+# it was removed as a workaround not worth its ugliness.
 #
-# The GUI strips the parameters from the address bar with a replace-style
-# navigation as soon as it reads them, and after one successful connect the
-# values live in localStorage, so the bare hostname works on its own from then
-# on. A stale entry there survives a fixed deployment and looks exactly like the
-# original fault, which is worth knowing before debugging this again: check in a
-# private window first.
+# Two things learned the hard way, if this is ever revisited:
+#
+#   - The GUI connects as soon as ANY of url, user or pass is present rather
+#     than waiting for the form. A url on its own leaves both credentials empty,
+#     which the client treats as consistent, so it connects unauthenticated,
+#     takes a 401, and the auth handler runs
+#     window.location.replace("/login?reason=auth") -- a full page load that
+#     discards the URL, since the store only persists after a successful
+#     connect. url with user instead trips the client's own "User and password
+#     must both be provided" check, which throws without the auth-failure flag
+#     and so prompts without reloading. Never add pass= to a URL served to
+#     visitors: it logs everyone in automatically.
+#   - A stale localStorage entry survives a fixed deployment and looks exactly
+#     like the original fault. Check in a private window before debugging.
 #
 # Every router names its service. Two services are declared on this container
 # and Traefik will not pick one for a router by itself -- it drops the router
@@ -148,18 +142,6 @@ services:
       - "traefik.http.routers.rclone-secure.priority=1"
       - "traefik.http.routers.rclone-secure.tls=true"
       - "traefik.http.routers.rclone-secure.service=rclone"
-      # Rewrites a bare visit to the root into the login page with all three
-      # connection parameters; see the header. Only the root matches, so /login
-      # and /api are untouched and there is no redirect loop. The $$ is a
-      # literal dollar escaped past Compose interpolation, not a variable.
-      #
-      # The host is matched as [^/]+ rather than spelled out, because the URL
-      # Traefik matches here carries the port whenever the entrypoint is not on
-      # 443, and an anchored hostname silently stops matching. The router's own
-      # Host rule is what actually constrains this to rclone.$SERVICE_DOMAIN.
-      - "traefik.http.middlewares.rclone-login.redirectregex.regex=^https?://[^/]+/?$$"
-      - "traefik.http.middlewares.rclone-login.redirectregex.replacement=https://rclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}/login?url=https%3A%2F%2Frclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}%2Fapi%2F&user=${RCLONE_GUI_USER:?required - login for the rclone web GUI}"
-      - "traefik.http.routers.rclone-secure.middlewares=rclone-login"
       - "traefik.http.services.rclone.loadbalancer.server.port=5572"
 networks:
   proxy:

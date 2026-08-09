@@ -703,12 +703,12 @@ One hostname, two ports behind it: the GUI on `rclone.$SERVICE_DOMAIN` and the r
 `/api` of the same host, via `--rc-baseurl`. `rclone gui` refuses to put both on one port, and the
 browser calls the API directly, so it cannot stay internal — but sharing an origin avoids a second
 DNS record and certificate, and removes CORS entirely. The GUI learns the API address only from a
-`url=` query parameter and its login form has no field for it, so a `redirectregex` middleware
-rewrites the bare hostname to `/login?url=…&user=…`. The password is deliberately left out: the GUI
-auto-connects the moment any parameter is present, so `url` alone connects unauthenticated and
-reloads away the URL it was given, while `url` and `user` trip a client-side check that prompts for
-the password without reloading. Adding `pass=` would log everyone in automatically.
-`services/garage` is reachable as an S3 remote at `http://garage:3900`.
+`url=` query parameter and its login form has no field for it, because `rclone gui` is built as a
+local launcher rather than a hosted service. A new browser therefore has to arrive at
+`/login?url=https%3A%2F%2Frclone.$SERVICE_DOMAIN%2Fapi%2F&user=…` once; it prompts for the password,
+and afterwards the values live in `localStorage` and the bare hostname works on its own. Only a
+private window or cleared site data needs the URL again. `services/garage` is reachable as an S3
+remote at `http://garage:3900`.
 
 - [compose.yaml](./services/rclone/compose.yaml)
 - [rclone - Documentation](https://rclone.org/docs/)
