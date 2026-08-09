@@ -72,6 +72,11 @@ The remaining host preparation is manual and captured as scripts to read rather 
 Each is a short list of commands with placeholders to fill in:
 
 - [scripts/zfs-setup.sh](./scripts/zfs-setup.sh) creates the ZFS pools the bind mounts sit on.
+- [scripts/htpasswd-for-compose.sh](./scripts/htpasswd-for-compose.sh) generates a bcrypt entry for a
+  Traefik `basicauth` middleware, printing both the raw and `$$`-doubled forms. Compose interpolates
+  `$` inside env-file and Portainer values, so a single-dollar hash is silently eaten and every login
+  is rejected while the browser still prompts normally. `--inspect <container> <label>` checks what
+  actually landed, which `docker compose config` cannot do because it re-escapes `$` for display.
 - [scripts/samba.sh](./scripts/samba.sh) exports media and source trees to the LAN.
 - [scripts/ssh.sh](./scripts/ssh.sh) disables root login and password authentication.
 
