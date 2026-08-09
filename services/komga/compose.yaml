@@ -1,0 +1,90 @@
+# Documentation Reference:
+# https://komga.org/docs/installation/docker
+# https://komga.org/docs/installation/configuration
+#
+# Adapted from:
+# https://komga.org/docs/installation/docker (compose example)
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY - host path for the library bind mount
+#
+# A comics and manga server, so it overlaps services/kavita. They are pointed at
+# separate trees here rather than sharing one: both write their own metadata and
+# both scan on a schedule, and aiming them at the same directory means two
+# scanners competing over the same files for no benefit. Point them at the same
+# path deliberately if the two are being compared, not by accident.
+#
+# Upstream publishes 25600:25600, dropped since Traefik is the only ingress.
+#
+# The image runs as root and ships /config owned by root, while upstream's
+# compose sets user: "1000:1000". Those two do not combine: Docker seeds a new
+# named volume from the image directory, ownership included, so /config arrives
+# owned by root and Komga cannot write its database. The init service below
+# fixes the ownership and exits first, the same shape audiobookshelf needs.
+#
+# The uid matters beyond that. Komga writes into the library during an import,
+# and as root those files would be undeletable over Samba and FTP, so it is
+# pinned to 1000:1000 to match the ownership of the shared trees.
+#
+# Upstream is explicit that /config must be on a local filesystem rather than a
+# CIFS or NFS share, which a named volume on the docker host satisfies.
+#
+# If Komga dies with an OutOfMemoryException on a large library, the documented
+# fix is a heap cap, for example JAVA_TOOL_OPTIONS=-Xmx4g. It is left unset
+# because the default suits a library this size.
+services:
+  # One-shot. Runs as root, chowns the config volume, exits. Idempotent, so it
+  # runs on every `up` rather than only the first.
+  komga-init:
+    image: "gotson/komga:latest"
+    container_name: "komga-init"
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    user: "0:0"
+    entrypoint: ["chown", "1000:1000", "/config"]
+    volumes:
+      - "komga-config:/config"
+
+  komga:
+    image: "gotson/komga:latest"
+    container_name: "komga"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    # Owns the files written into the library on import; see header.
+    user: "1000:1000"
+    depends_on:
+      komga-init:
+        condition: service_completed_successfully
+    networks:
+      - "proxy"
+    environment:
+      - TZ=America/New_York
+    volumes:
+      # Database, thumbnails and settings. Komga alone reads it.
+      - "komga-config:/config"
+      # The library stays a bind mount: it is the same media tree reachable over
+      # Samba and FTP, filled from the host rather than through Komga.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path for the comics library}/komga/data/books:/data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.komga.entrypoints=http"
+      - "traefik.http.routers.komga.rule=Host(`komga.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.middlewares.komga-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.komga.middlewares=komga-https-redirect"
+      - "traefik.http.routers.komga-secure.entrypoints=https"
+      - "traefik.http.routers.komga-secure.rule=Host(`komga.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.routers.komga-secure.tls=true"
+      - "traefik.http.routers.komga-secure.service=komga"
+      - "traefik.http.services.komga.loadbalancer.server.port=25600"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  komga-config:

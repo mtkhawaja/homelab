@@ -500,6 +500,20 @@ apply on the first start, before an admin account exists.
 - [Keycloak - Running in a container](https://www.keycloak.org/server/containers)
 - [Keycloak - Reverse proxy configuration](https://www.keycloak.org/server/reverseproxy)
 
+### Komga
+
+> Komga is a media server for comics, mangas, BDs, magazines and eBooks.
+
+Overlaps Kavita and is pointed at a separate tree on purpose, since both write their own metadata and
+both scan on a schedule. The image runs as root but upstream's compose sets `user: "1000:1000"`,
+which does not combine: a fresh named volume seeds `/config` root-owned and Komga cannot write its
+database, so an init container chowns it first. The uid matters anyway, because Komga writes into the
+library on import and root-owned files would be undeletable over Samba.
+
+- [compose.yaml](./services/komga/compose.yaml)
+- [Komga - Docker installation](https://komga.org/docs/installation/docker)
+- [Komga - Configuration](https://komga.org/docs/installation/configuration)
+
 ### Mautic
 
 > Mautic is open-source marketing automation software.
