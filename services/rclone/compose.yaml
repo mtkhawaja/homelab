@@ -42,20 +42,37 @@
 # with nowhere to type an address. The redirectregex middleware rewrites the
 # root to the login page with all three parameters.
 #
-# All three, not just the URL. The GUI treats the presence of any one of url,
-# user or pass as "connect now" and submits immediately rather than waiting for
-# the form, so a url on its own connects with empty credentials, takes a 401,
-# and the auth handler runs window.location.replace("/login?reason=auth"). That
-# is a full page load, which discards the URL it was just given, since the store
-# only persists after a successful connect -- landing back on the same "URL is
-# not configured". A partial set is worse than none.
+# url and user, deliberately without the password. The GUI treats the presence
+# of any one of the three as "connect now" and submits immediately rather than
+# waiting for the form, so the combination matters:
 #
-# The cost is the password reaching the Location header and anything that logs
-# it, Traefik's access log included. The GUI strips all three parameters from
-# the address bar with a replace-style navigation as soon as it reads them, so
-# they do not linger in browser history, and after one successful connect the
-# values live in localStorage and the bare hostname works on its own. Keep
-# RCLONE_GUI_PASS to A-Za-z0-9: an & or = would end the query parameter early.
+#   url alone       - user and pass are both empty, which the client considers
+#                     consistent, so it connects unauthenticated, takes a 401,
+#                     and the auth handler runs
+#                     window.location.replace("/login?reason=auth"). That is a
+#                     full page load, which discards the URL it was just given,
+#                     since the store only persists after a successful connect.
+#                     The result is the same "URL is not configured" the bare
+#                     hostname gives.
+#   url and user    - the client rejects the asymmetry itself with "User and
+#                     password must both be provided". That check throws without
+#                     the auth-failure flag, so there is no reload: the URL and
+#                     user stay filled in and the password field is waiting.
+#   all three       - connects with no prompt at all, which also means Traefik
+#                     hands the password to whoever loads the page.
+#
+# The middle one is what is configured. Adding pass= would make the password
+# part of a redirect served to every visitor, so it would reach the Location
+# header, the container labels and Traefik's access log, and anyone who could
+# reach the hostname would be logged in automatically -- for a process that can
+# read and write every configured remote and all of /data.
+#
+# The GUI strips the parameters from the address bar with a replace-style
+# navigation as soon as it reads them, and after one successful connect the
+# values live in localStorage, so the bare hostname works on its own from then
+# on. A stale entry there survives a fixed deployment and looks exactly like the
+# original fault, which is worth knowing before debugging this again: check in a
+# private window first.
 #
 # Every router names its service. Two services are declared on this container
 # and Traefik will not pick one for a router by itself -- it drops the router
@@ -141,7 +158,7 @@ services:
       # 443, and an anchored hostname silently stops matching. The router's own
       # Host rule is what actually constrains this to rclone.$SERVICE_DOMAIN.
       - "traefik.http.middlewares.rclone-login.redirectregex.regex=^https?://[^/]+/?$$"
-      - "traefik.http.middlewares.rclone-login.redirectregex.replacement=https://rclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}/login?url=https%3A%2F%2Frclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}%2Fapi%2F&user=${RCLONE_GUI_USER:?required - login for the rclone web GUI}&pass=${RCLONE_GUI_PASS:?required - password for RCLONE_GUI_USER, A-Za-z0-9 only}"
+      - "traefik.http.middlewares.rclone-login.redirectregex.replacement=https://rclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}/login?url=https%3A%2F%2Frclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}%2Fapi%2F&user=${RCLONE_GUI_USER:?required - login for the rclone web GUI}"
       - "traefik.http.routers.rclone-secure.middlewares=rclone-login"
       - "traefik.http.services.rclone.loadbalancer.server.port=5572"
 networks:
