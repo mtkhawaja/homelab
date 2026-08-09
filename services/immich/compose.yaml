@@ -75,6 +75,12 @@ services:
     # Upstream requires the database on local disk rather than over the network,
     # which a named volume on the docker host satisfies.
     volumes:
+      # Every other Postgres in this repo mounts /var/lib/postgresql, one level
+      # up. Do not "fix" this one to match. That path is right for postgres:18,
+      # which puts PGDATA at /var/lib/postgresql/18/docker, and wrong here: this
+      # image is PG_MAJOR=14 with PGDATA=/var/lib/postgresql/data, so moving the
+      # mount up would leave the data directory outside the volume and lose the
+      # database on every recreate.
       - "immich-db-data:/var/lib/postgresql/data"
     shm_size: "128mb"
     # The image ships its own healthcheck, which knows about the vector
