@@ -701,9 +701,11 @@ OpenVPN.
 
 Serves two hostnames, the way Nexus does: `rclone.$SERVICE_DOMAIN` is the web GUI and
 `rclone-api.$SERVICE_DOMAIN` is the remote control API the browser calls directly. `rclone gui`
-refuses to put both on one port, and the split origins are why `--rc-allow-origin` is set. The way
-in is `/login?user=…&pass=…&url=https://rclone-api.$SERVICE_DOMAIN/`. `services/garage` is reachable
-as an S3 remote at `http://garage:3900`.
+refuses to put both on one port, and the split origins are why `--rc-allow-origin` is set. The GUI
+learns the API address only from a `url=` query parameter and its login form has no field for it, so
+a `redirectregex` middleware rewrites the bare hostname to `/login?url=…` — without it the root just
+reports "URL is not configured". `services/garage` is reachable as an S3 remote at
+`http://garage:3900`.
 
 - [compose.yaml](./services/rclone/compose.yaml)
 - [rclone - Documentation](https://rclone.org/docs/)
