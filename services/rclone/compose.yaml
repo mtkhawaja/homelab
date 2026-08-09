@@ -28,18 +28,28 @@
 # Because those are different origins, --rc-allow-origin is required or every
 # call the GUI makes is blocked by CORS.
 #
-# The GUI is told which API to talk to at login, as a query parameter, and the
-# login form has no field for it. Visiting the bare hostname therefore always
-# fails with "URL is not configured. Start the GUI launcher again." rather than
-# prompting for anything, since the GUI has no way to learn the address on its
-# own. The redirectregex middleware below rewrites the root to:
+# The GUI is told which API to talk to at login, as a query parameter, and its
+# login form has fields for the user and password but none for the URL. Visiting
+# the bare hostname therefore always fails with "URL is not configured. Start
+# the GUI launcher again.", because there is nowhere to type the address.
 #
-#   https://rclone.$SERVICE_DOMAIN/login?url=https://rclone-api.$SERVICE_DOMAIN/
+# The redirectregex middleware below rewrites the root to the login page with
+# all three parameters. All three is not belt and braces: the GUI treats the
+# presence of any one of url, user or pass as "connect now" and immediately
+# submits rather than waiting for the form. A url on its own therefore connects
+# with empty credentials, takes a 401, and the auth handler responds with
+# window.location.replace("/login?reason=auth") -- a full page load, which
+# discards the URL it was just given, since the store only persists after a
+# successful connect. The result is the same "URL is not configured" the plain
+# hostname gives. A partial set is worse than none.
 #
-# so the bare hostname works and the credentials are still typed into the form
-# rather than being carried in a URL. Appending user= and pass= to that query
-# skips the form entirely, which is convenient for a bookmark and puts the
-# password in browser history; the redirect deliberately does not do it.
+# The cost is the password appearing in the redirect, so it reaches the Location
+# header and anything logging it, Traefik's access log included. The GUI strips
+# the three parameters from the address bar with a replace-style navigation as
+# soon as it reads them, so they do not linger in browser history, and after one
+# successful connect the values live in localStorage and the bare hostname works
+# on its own. Keep RCLONE_GUI_PASS to A-Za-z0-9: an & or = in it would end the
+# query parameter early and break the redirect.
 #
 # The GUI is embedded in the binary at build time as of rclone 1.74, so nothing
 # is fetched at runtime. The older `rcd --rc-web-gui` serves both on one port,
@@ -92,16 +102,22 @@ services:
       - "traefik.http.routers.rclone.rule=Host(`rclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
       - "traefik.http.middlewares.rclone-https-redirect.redirectscheme.scheme=https"
       - "traefik.http.routers.rclone.middlewares=rclone-https-redirect"
+      # Required, unlike on single-service stacks. Two services are declared on
+      # this container, so Traefik will not pick one for a router by itself and
+      # drops the router outright: "cannot be linked automatically with multiple
+      # Services". The https routers below name theirs for the same reason.
+      - "traefik.http.routers.rclone.service=rclone"
       - "traefik.http.routers.rclone-secure.entrypoints=https"
       - "traefik.http.routers.rclone-secure.rule=Host(`rclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
       - "traefik.http.routers.rclone-secure.tls=true"
       - "traefik.http.routers.rclone-secure.service=rclone"
-      # Rewrites a bare visit to the root into the login page with the API
-      # address filled in; see the header. /login already carries a path, so it
-      # does not match this and there is no redirect loop. The $$ is a literal
-      # dollar escaped past Compose interpolation, not a variable.
+      # Rewrites a bare visit to the root into the login page, carrying all
+      # three connection parameters; see the header for why partial ones fail.
+      # /login already has a path, so it does not match this and there is no
+      # redirect loop. The $$ is a literal dollar escaped past Compose
+      # interpolation, not a variable.
       - "traefik.http.middlewares.rclone-api-url.redirectregex.regex=^https://rclone\\.${SERVICE_DOMAIN:?required - the domain Traefik routes on}/?$$"
-      - "traefik.http.middlewares.rclone-api-url.redirectregex.replacement=https://rclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}/login?url=https%3A%2F%2Frclone-api.${SERVICE_DOMAIN:?required - the domain Traefik routes on}%2F"
+      - "traefik.http.middlewares.rclone-api-url.redirectregex.replacement=https://rclone.${SERVICE_DOMAIN:?required - the domain Traefik routes on}/login?url=https%3A%2F%2Frclone-api.${SERVICE_DOMAIN:?required - the domain Traefik routes on}%2F&user=${RCLONE_GUI_USER:?required - login for the rclone web GUI}&pass=${RCLONE_GUI_PASS:?required - password for RCLONE_GUI_USER}"
       - "traefik.http.routers.rclone-secure.middlewares=rclone-api-url"
       - "traefik.http.services.rclone.loadbalancer.server.port=5572"
       # Remote control API, which the browser calls directly
@@ -109,6 +125,7 @@ services:
       - "traefik.http.routers.rclone-api.rule=Host(`rclone-api.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
       - "traefik.http.middlewares.rclone-api-https-redirect.redirectscheme.scheme=https"
       - "traefik.http.routers.rclone-api.middlewares=rclone-api-https-redirect"
+      - "traefik.http.routers.rclone-api.service=rclone-api"
       - "traefik.http.routers.rclone-api-secure.entrypoints=https"
       - "traefik.http.routers.rclone-api-secure.rule=Host(`rclone-api.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
       - "traefik.http.routers.rclone-api-secure.tls=true"
