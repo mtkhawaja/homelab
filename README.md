@@ -324,6 +324,22 @@ concept of a zpool, so pool health, vdev state and I/O are not covered.
 - [compose.yaml](./services/calibre-web/compose.yaml)
 - [Calibre Web - Installation Instructions](https://docs.linuxserver.io/images/docker-calibre-web/)
 
+### Coder
+
+> Coder provisions remote development environments defined as code, on your own infrastructure.
+
+Server plus its own Postgres. **Mounts the Docker socket read-write**, which provisioning requires
+and which makes anyone who can create a workspace root-equivalent on the host — weigh that before
+opening signups. `group_add` carries the host's `docker` gid, since the image runs as uid 1000.
+Workspace apps use the suffix wildcard `*-coder.$SERVICE_DOMAIN` rather than
+`*.coder.$SERVICE_DOMAIN`: a TLS wildcard matches exactly one label, so the suffix form is covered by
+the existing certificate while the prefix form would need a second one. Traefik matches it with
+`HostRegexp`, and a wildcard DNS record is required since the workspace part is generated.
+
+- [compose.yaml](./services/coder/compose.yaml)
+- [Coder - Docker installation](https://coder.com/docs/install/docker)
+- [Coder - Setup and access URLs](https://coder.com/docs/admin/setup)
+
 ### Container Registry
 
 > A stateless, highly scalable server side application that stores and lets you distribute Docker images.

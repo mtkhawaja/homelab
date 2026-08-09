@@ -1,0 +1,148 @@
+# Documentation Reference:
+# https://coder.com/docs/install/docker
+# https://coder.com/docs/admin/setup
+#
+# Adapted from:
+# https://github.com/coder/coder/blob/main/compose.yaml
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN     - Traefik host rules, e.g. local.example.com
+#   CODER_DB_USER      - Postgres role owning the coder database
+#   CODER_DB_PASSWORD  - password for that role
+#   CODER_DOCKER_GID   - gid of the host's `docker` group, from
+#                        `getent group docker | cut -d: -f3`. On orion it is 984.
+#                        Wrong value and workspace provisioning fails with a
+#                        permission error on the socket rather than at startup.
+#
+# Remote development environments. Workspaces are provisioned by Terraform
+# templates; the starter template uses the Docker provider on this host, which
+# is what the socket below is for.
+#
+# ---------------------------------------------------------------------------
+# THIS MOUNTS THE DOCKER SOCKET READ-WRITE. That is root on the host, granted to
+# anyone who can create a workspace, and it cannot be :ro because provisioning
+# creates containers. Coder's own users are therefore host-root-equivalent in
+# practice. Only `alloy` and `portainer` otherwise hold this, and both are
+# read-only. Weigh that before opening signups.
+# ---------------------------------------------------------------------------
+#
+# The image runs as uid 1000, which is not in the host's docker group, so
+# group_add is what actually grants access to the socket. Upstream ships it
+# commented out with a note to fill in the gid.
+#
+# Two hostnames, and the second one is the reason this file looks the way it
+# does:
+#
+#   coder.$SERVICE_DOMAIN     - the dashboard
+#   *-coder.$SERVICE_DOMAIN   - per-workspace apps and port forwarding
+#
+# Coder documents the wildcard in two shapes, *.coder.example.com and the suffix
+# form *-coder.example.com. The suffix form is used here deliberately. A TLS
+# wildcard matches exactly one label, so the existing *.$SERVICE_DOMAIN
+# certificate covers `8080--main--ws--user-coder.$SERVICE_DOMAIN` but would NOT
+# cover `8080--main--ws--user.coder.$SERVICE_DOMAIN`. The prefix shape needs a
+# second certificate; this one needs nothing new.
+#
+# DNS still has to resolve it. A wildcard record for *.$SERVICE_DOMAIN covers
+# these names; per-host records do not, since the workspace part is generated.
+#
+# Traefik matches that shape with HostRegexp. The regex requires a literal -coder
+# before the domain, so the dashboard hostname cannot match it and the two
+# routers do not overlap.
+#
+# CODER_ACCESS_URL has to be the URL Traefik publishes: workspaces call back to
+# it, so a container port or localhost is not usable.
+#
+# The database is bundled rather than pointed at services/postgres, following
+# paperless and karakeep, and stays on the internal network with only the server
+# bridging to `proxy`. Upstream requires Postgres 13 or newer.
+services:
+  database:
+    image: "postgres:17"
+    container_name: "coder-database"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "coder"
+    environment:
+      POSTGRES_DB: "coder"
+      POSTGRES_USER: "${CODER_DB_USER:?required - Postgres role owning the coder database}"
+      POSTGRES_PASSWORD: "${CODER_DB_PASSWORD:?required - password for CODER_DB_USER}"
+    volumes:
+      - "coder-database-data:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d coder"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  coder:
+    image: "ghcr.io/coder/coder:latest"
+    container_name: "coder"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - "proxy"
+      - "coder"
+    # The image runs as uid 1000; this is what lets it reach the docker socket.
+    group_add:
+      - "${CODER_DOCKER_GID:?required - gid of the host docker group}"
+    environment:
+      TZ: "America/New_York"
+      CODER_HTTP_ADDRESS: "0.0.0.0:7080"
+      CODER_PG_CONNECTION_URL: "postgresql://${CODER_DB_USER:?required - Postgres role owning the coder database}:${CODER_DB_PASSWORD:?required - password for CODER_DB_USER}@database/coder?sslmode=disable"
+      # Workspaces call back to this, so it is the published URL rather than a
+      # container address.
+      CODER_ACCESS_URL: "https://coder.${SERVICE_DOMAIN:?required - the domain Traefik routes on}"
+      # Suffix form on purpose; see header. Changing it to *.coder.$SERVICE_DOMAIN
+      # needs a second wildcard certificate.
+      CODER_WILDCARD_ACCESS_URL: "*-coder.${SERVICE_DOMAIN:?required - the domain Traefik routes on}"
+    volumes:
+      # Root on the host. See the warning in the header.
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      # Provisioner state and the CLI's own files. Upstream calls this optional,
+      # since Coder recreates what it needs, but without it every restart
+      # rebuilds them.
+      - "coder-home:/home/coder"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      # Dashboard
+      - "traefik.http.routers.coder.entrypoints=http"
+      - "traefik.http.routers.coder.rule=Host(`coder.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.middlewares.coder-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.coder.middlewares=coder-https-redirect"
+      - "traefik.http.routers.coder.service=coder"
+      - "traefik.http.routers.coder-secure.entrypoints=https"
+      - "traefik.http.routers.coder-secure.rule=Host(`coder.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.routers.coder-secure.tls=true"
+      - "traefik.http.routers.coder-secure.service=coder"
+      # Workspace apps and port forwarding. The literal -coder before the domain
+      # keeps this from matching the dashboard hostname above. The $$ are
+      # literal dollars escaped past Compose interpolation, not variables.
+      - "traefik.http.routers.coder-apps.entrypoints=http"
+      - "traefik.http.routers.coder-apps.rule=HostRegexp(`^.+-coder\\.${SERVICE_DOMAIN:?required - the domain Traefik routes on}$$`)"
+      - "traefik.http.routers.coder-apps.middlewares=coder-https-redirect"
+      - "traefik.http.routers.coder-apps.service=coder"
+      - "traefik.http.routers.coder-apps-secure.entrypoints=https"
+      - "traefik.http.routers.coder-apps-secure.rule=HostRegexp(`^.+-coder\\.${SERVICE_DOMAIN:?required - the domain Traefik routes on}$$`)"
+      - "traefik.http.routers.coder-apps-secure.tls=true"
+      - "traefik.http.routers.coder-apps-secure.service=coder"
+      - "traefik.http.services.coder.loadbalancer.server.port=7080"
+networks:
+  proxy:
+    external: true
+  coder:
+    driver: bridge
+volumes:
+  coder-database-data:
+  coder-home:
