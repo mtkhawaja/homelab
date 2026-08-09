@@ -28,7 +28,15 @@ services:
       # System Configuration
       - SYSTEM_DEFAULTLOCALE=en-US           # Default locale
       - SYSTEM_GOOGLEVISIBILITY=false        # Hide from search engines
-      - SYSTEM_ROOTURIPATH=/                 # Base URL path
+      # SYSTEM_ROOTURIPATH is deliberately unset. It was `/`, which is the
+      # default and looks harmless, but the image's own healthcheck builds
+      # curl http://localhost:8080${SYSTEM_ROOTURIPATH:-''}/api/v1/info/status
+      # and expects it empty. A `/` makes that //api/v1/info/status, which the
+      # app answers with 400, so curl -f exits 22 and the container is marked
+      # unhealthy forever while serving perfectly well. Traefik then drops
+      # unhealthy containers from its routers, so the only visible symptom was
+      # a 404 through the proxy on a container reporting healthy logs. Set this
+      # only to serve under a subpath, and never to `/`.
       - SYSTEM_CONNECTIONTIMEOUTMINUTES=5    # Connection timeout
       - SYSTEM_MAXFILESIZE=2000              # Max file size in MB
       - SYSTEM_CUSTOMSTATICFILEPATH=/customFiles/static/  # Custom files path
