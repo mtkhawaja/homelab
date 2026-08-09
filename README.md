@@ -303,9 +303,14 @@ hub reaches the agent over a unix socket in a shared volume, so the agent listen
 agent needs the hub's public key, which only exists after the hub has run once, so the first deploy
 takes two passes; see the compose file header.
 
+Both ZFS pools are monitored through the agent's `/extra-filesystems` mounts, which need
+`mkdir -p /hdd-0-pool/.beszel /ssd-0-pool/.beszel` on the host first. Capacity only — Beszel has no
+concept of a zpool, so pool health, vdev state and I/O are not covered.
+
 - [compose.yaml](./services/beszel/compose.yaml)
 - [Beszel - Getting started](https://beszel.dev/guide/getting-started)
 - [Beszel - Agent installation](https://beszel.dev/guide/agent-installation)
+- [Beszel - Additional disks](https://beszel.dev/guide/additional-disks)
 
 ### Calibre Web
 

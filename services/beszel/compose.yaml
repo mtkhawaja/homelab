@@ -25,6 +25,23 @@
 # An empty key would leave the agent accepting connections from any hub, which
 # is why it is guarded rather than defaulted.
 #
+# The two ZFS pools are monitored through the extra-filesystems mounts on the
+# agent. That is the Docker form of the feature; EXTRA_FILESYSTEMS is the binary
+# agent's equivalent and does nothing here. A marker directory is mounted rather
+# than the pool itself, so the agent stats the filesystem without any of the
+# contents being exposed to it. Create them before the first start:
+#
+#   mkdir -p /hdd-0-pool/.beszel /ssd-0-pool/.beszel
+#
+# Capacity only. Beszel has no concept of a zpool, so pool health, vdev state
+# and scrub or error counters are not covered by this, and neither is I/O:
+# Beszel reads that from /proc/diskstats, where a pool name never appears. Pool
+# health is what `zed` on the host is for.
+#
+# Reported free space also moves in ways an ordinary filesystem's does not,
+# since ZFS computes it against snapshots, quotas, refreservations and the other
+# datasets in the pool. Worth knowing before setting an alert threshold on it.
+#
 # The hub reaches the agent over a unix socket in a shared volume rather than
 # over the network, so the agent listens on no TCP port at all. That is upstream's
 # recommendation when both run on the same host, and it is why the agent needs no
@@ -76,10 +93,17 @@ services:
     environment:
       LISTEN: "/beszel_socket/beszel.sock"
       KEY: "${BESZEL_KEY:?required - the hub's public key, shown under Add System in the hub UI}"
+      # Keeps the extra filesystems from being re-stat'd on every collection,
+      # which matters for the spinning pool rather than the SSD one.
+      DISK_USAGE_CACHE: "5m"
     volumes:
       # Agent state, including the fingerprint that identifies this system.
       - "beszel-agent-data:/var/lib/beszel-agent"
       - "beszel-socket:/beszel_socket"
+      # The ZFS pools. Each is a marker directory rather than the pool itself;
+      # the name after the mount point is what the hub labels the disk.
+      - "/hdd-0-pool/.beszel:/extra-filesystems/hdd-0-pool:ro"
+      - "/ssd-0-pool/.beszel:/extra-filesystems/ssd-0-pool:ro"
       # Container CPU, memory and network stats. Read-only: the agent only ever
       # queries the Docker API, and a writable socket would be root on the host.
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
