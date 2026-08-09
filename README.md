@@ -789,6 +789,21 @@ and the config keys, so it is not a tag bump. Plex is on `proxy`, so Seerr reach
 - [Seerr - Docker installation](https://docs.seerr.dev/getting-started/docker/)
 - [Seerr - Migration guide](https://docs.seerr.dev/migration-guide/)
 
+### SnapOtter
+
+> Open-source, self-hosted file-processing tool. Convert, compress, OCR, transcribe and run local AI across image, video, audio, PDF and documents.
+
+Server plus its own Postgres and Redis, with only the server on `proxy`. The image can run standalone
+with an embedded database, which switches off as soon as `DATABASE_URL` is set; the split stack is
+used so the database can be backed up and upgraded on its own. Overlaps Stirling PDF on PDF tools and
+Paperless on OCR rather than replacing either. `ANALYTICS_ENABLED` is off, since upstream sends
+anonymous usage telemetry by default, and `TRUST_PROXY` is left at its default, which already trusts
+Traefik over the bridge.
+
+- [compose.yaml](./services/snapotter/compose.yaml)
+- [SnapOtter - GitHub](https://github.com/snapotter-hq/SnapOtter)
+- [SnapOtter - Configuration](https://docs.snapotter.com/guide/configuration)
+
 ### Speedtest Tracker
 
 > Speedtest Tracker is a self-hosted application that monitors the performance and uptime of your

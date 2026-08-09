@@ -1,0 +1,142 @@
+# Documentation Reference:
+# https://github.com/snapotter-hq/SnapOtter
+# https://docs.snapotter.com/guide/configuration
+#
+# Adapted from:
+# https://github.com/snapotter-hq/SnapOtter/blob/main/DOCKERHUB.md (production
+# compose stack)
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN            - Traefik host rules, e.g. local.example.com
+#   SNAPOTTER_DB_USER         - Postgres role owning the snapotter database
+#   SNAPOTTER_DB_PASSWORD     - password for that role
+#   SNAPOTTER_ADMIN_PASSWORD  - seeds the initial admin account on first boot
+#
+# A file-processing suite: convert, compress, OCR, transcribe and run local AI
+# over images, video, audio and PDFs. It overlaps stirling-pdf on the PDF tools
+# and paperless on OCR, so it is a third thing that reads documents rather than
+# a replacement for either. Nothing here points them at a shared tree.
+#
+# The image can run standalone with an embedded Postgres and Redis on loopback,
+# which is what the one-line `docker run` in upstream's README does. That mode
+# switches itself off the moment DATABASE_URL is set, and the production stack
+# below is used instead so the database is a container that can be backed up
+# and upgraded on its own.
+#
+# Upstream pins postgres:17-alpine and its embedded mode is also 17. This uses
+# 18 to match every other Postgres in the repo, which is a deliberate deviation:
+# SnapOtter talks to it over a plain connection string with no extensions, so
+# there is nothing version-coupled the way immich's pgvecto.rs build is. If the
+# database misbehaves in a way that looks like a Postgres version problem, this
+# is the first thing to reconsider.
+#
+# postgres:18 declares its volume at /var/lib/postgresql, one level above PGDATA
+# at /var/lib/postgresql/18/docker, so the mount is not the /data path upstream
+# uses with 17.
+#
+# TRUST_PROXY is left at its default, which believes X-Forwarded-For only from
+# private-network peers. Traefik reaches this over the `proxy` bridge, so it is
+# already trusted, and setting `true` would let a forged header through from
+# anywhere. Do not set it.
+#
+# ANALYTICS_ENABLED is off. Upstream sends anonymous tool-usage and error
+# telemetry by default; no file data, but it leaves the network.
+#
+# The image ships a healthcheck against /api/v1/health with a three minute start
+# period, so none is declared for the server below. Redis has none of its own,
+# so it gets one, otherwise service_healthy would wait forever.
+services:
+  database:
+    image: "postgres:18"
+    container_name: "snapotter-database"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "snapotter"
+    environment:
+      POSTGRES_DB: "snapotter"
+      POSTGRES_USER: "${SNAPOTTER_DB_USER:?required - Postgres role owning the snapotter database}"
+      POSTGRES_PASSWORD: "${SNAPOTTER_DB_PASSWORD:?required - password for SNAPOTTER_DB_USER}"
+    volumes:
+      - "snapotter-db-data:/var/lib/postgresql"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d snapotter"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: "redis:8"
+    container_name: "snapotter-redis"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "snapotter"
+    volumes:
+      # The job queue. SnapOtter rebuilds it, but persisting avoids losing
+      # in-flight work across a restart.
+      - "snapotter-redis-data:/data"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  snapotter:
+    image: "snapotter/snapotter:latest"
+    container_name: "snapotter"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - "proxy"
+      - "snapotter"
+    environment:
+      TZ: "America/New_York"
+      DATABASE_URL: "postgres://${SNAPOTTER_DB_USER:?required - Postgres role owning the snapotter database}:${SNAPOTTER_DB_PASSWORD:?required - password for SNAPOTTER_DB_USER}@database:5432/snapotter"
+      REDIS_URL: "redis://redis:6379"
+      # Seeds the admin account on the first boot only, and is ignored once the
+      # account exists. Upstream defaults both to `admin`.
+      DEFAULT_USERNAME: "admin"
+      DEFAULT_PASSWORD: "${SNAPOTTER_ADMIN_PASSWORD:?required - initial admin password, first boot only}"
+      # Used for OIDC redirects, so it is the address a browser reaches rather
+      # than the container port.
+      EXTERNAL_URL: "https://snapotter.${SERVICE_DOMAIN:?required - the domain Traefik routes on}"
+      ANALYTICS_ENABLED: "false"
+    volumes:
+      # Uploads, processed output and AI model weights. Several GB once the
+      # optional model packs are pulled, and nothing on the host reads it.
+      - "snapotter-data:/data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.snapotter.entrypoints=http"
+      - "traefik.http.routers.snapotter.rule=Host(`snapotter.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.middlewares.snapotter-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.snapotter.middlewares=snapotter-https-redirect"
+      - "traefik.http.routers.snapotter-secure.entrypoints=https"
+      - "traefik.http.routers.snapotter-secure.rule=Host(`snapotter.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.routers.snapotter-secure.tls=true"
+      - "traefik.http.routers.snapotter-secure.service=snapotter"
+      - "traefik.http.services.snapotter.loadbalancer.server.port=1349"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+  snapotter:
+    driver: bridge
+volumes:
+  snapotter-data:
+  snapotter-db-data:
+  snapotter-redis-data:
