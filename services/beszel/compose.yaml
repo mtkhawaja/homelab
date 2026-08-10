@@ -9,9 +9,16 @@
 # --env-file, the shell environment, or Portainer's stack variables. Guarded,
 # so Compose refuses to start rather than interpolating an empty string.
 #
-#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
-#   BESZEL_KEY     - the hub's ED25519 public key, which the agent uses to
-#                    verify that the connecting hub is the real one
+#   SERVICE_DOMAIN     - Traefik host rules, e.g. local.example.com
+#   BESZEL_KEY         - the hub's ED25519 public key, which the agent uses to
+#                        verify that the connecting hub is the real one
+#   BESZEL_EXTRA_FS_A_DIRECTORY - host path of an extra filesystem to report capacity for,
+#   BESZEL_EXTRA_FS_B_DIRECTORY  such as a ZFS pool mountpoint. See the note below.
+#
+# Optional:
+#
+#   BESZEL_EXTRA_FS_A_LABEL  - what the hub calls each of them, defaulting to
+#   BESZEL_EXTRA_FS_B_LABEL    extra-fs-a and extra-fs-b
 #
 # BESZEL_KEY does not exist until the hub has run once, so the first deploy is
 # two steps:
@@ -25,13 +32,19 @@
 # An empty key would leave the agent accepting connections from any hub, which
 # is why it is guarded rather than defaulted.
 #
-# The two ZFS pools are monitored through the extra-filesystems mounts on the
-# agent. That is the Docker form of the feature; EXTRA_FILESYSTEMS is the binary
-# agent's equivalent and does nothing here. A marker directory is mounted rather
-# than the pool itself, so the agent stats the filesystem without any of the
-# contents being exposed to it. Create them before the first start:
+# Two extra filesystems are monitored through the extra-filesystems mounts on
+# the agent, named by BESZEL_EXTRA_FS_A_DIRECTORY and BESZEL_EXTRA_FS_B_DIRECTORY.
+# That is the Docker form of the feature; EXTRA_FILESYSTEMS is the binary
+# agent's equivalent and does nothing here. A marker directory is mounted
+# rather than the filesystem itself, so the agent stats it without any of the
+# contents being exposed. Create one in each before the first start:
 #
-#   mkdir -p /hdd-0-pool/.beszel /ssd-0-pool/.beszel
+#   mkdir -p "$BESZEL_EXTRA_FS_A_DIRECTORY/.beszel" "$BESZEL_EXTRA_FS_B_DIRECTORY/.beszel"
+#
+# Two, because a compose file cannot take a variable number of mounts. Monitor
+# fewer by pointing both at the same path, or more by adding another pair of
+# lines. The segment after /extra-filesystems/ is the label the hub displays and
+# has nothing to do with the host path.
 #
 # Capacity only. Beszel has no concept of a zpool, so pool health, vdev state
 # and scrub or error counters are not covered by this, and neither is I/O:
@@ -94,16 +107,16 @@ services:
       LISTEN: "/beszel_socket/beszel.sock"
       KEY: "${BESZEL_KEY:?required - the hub's public key, shown under Add System in the hub UI}"
       # Keeps the extra filesystems from being re-stat'd on every collection,
-      # which matters for the spinning pool rather than the SSD one.
+      # which matters for spinning disks in particular.
       DISK_USAGE_CACHE: "5m"
     volumes:
       # Agent state, including the fingerprint that identifies this system.
       - "beszel-agent-data:/var/lib/beszel-agent"
       - "beszel-socket:/beszel_socket"
-      # The ZFS pools. Each is a marker directory rather than the pool itself;
-      # the name after the mount point is what the hub labels the disk.
-      - "/hdd-0-pool/.beszel:/extra-filesystems/hdd-0-pool:ro"
-      - "/ssd-0-pool/.beszel:/extra-filesystems/ssd-0-pool:ro"
+      # Extra filesystems. Each is a marker directory rather than the filesystem
+      # itself; the name after the mount point is what the hub labels the disk.
+      - "${BESZEL_EXTRA_FS_A_DIRECTORY:?required - host path of the first extra filesystem to monitor}/.beszel:/extra-filesystems/${BESZEL_EXTRA_FS_A_LABEL:-extra-fs-a}:ro"
+      - "${BESZEL_EXTRA_FS_B_DIRECTORY:?required - host path of the second extra filesystem to monitor}/.beszel:/extra-filesystems/${BESZEL_EXTRA_FS_B_LABEL:-extra-fs-b}:ro"
       # Container CPU, memory and network stats. Read-only: the agent only ever
       # queries the Docker API, and a writable socket would be root on the host.
       - "/var/run/docker.sock:/var/run/docker.sock:ro"

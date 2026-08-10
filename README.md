@@ -299,6 +299,22 @@ metadata volumes before the server starts; deploying is still a single `up --det
 - [compose.yaml](./services/audiobookshelf/compose.yaml)
 - [Audiobookshelf - Docker install](https://www.audiobookshelf.org/docs/documentation/install/docker/)
 
+### Backrest
+
+> Backrest is a web UI and orchestrator for restic backup.
+
+The backup UI, targeting Backblaze B2. What is backed up is set in the plan, in the UI. Every source
+is mounted read-only, including `/var/lib/docker/volumes`, which is where
+the named volumes holding each service's database and settings actually live. Those usually sit on
+the system disk rather than on a snapshottable filesystem, so nothing else covers them. The Docker
+socket is deliberately not mounted: pre-backup hooks
+would need it writable, which is root on the host, and database dumps run host-side into a staging
+directory instead.
+
+- [compose.yaml](./services/backrest/compose.yaml)
+- [Backrest - GitHub](https://github.com/garethgeorge/backrest)
+- [restic - Documentation](https://restic.readthedocs.io/)
+
 ### Beszel
 
 > Simple, lightweight server monitoring with Docker stats, historical data, and alerts.
@@ -308,9 +324,10 @@ hub reaches the agent over a unix socket in a shared volume, so the agent listen
 agent needs the hub's public key, which only exists after the hub has run once, so the first deploy
 takes two passes; see the compose file header.
 
-Both ZFS pools are monitored through the agent's `/extra-filesystems` mounts, which need
-`mkdir -p /hdd-0-pool/.beszel /ssd-0-pool/.beszel` on the host first. Capacity only — Beszel has no
-concept of a zpool, so pool health, vdev state and I/O are not covered.
+Extra filesystems, such as ZFS pool mountpoints, are monitored through the agent's
+`/extra-filesystems` mounts, set with `BESZEL_EXTRA_FS_A_DIRECTORY` and `..._B_DIRECTORY`; each needs a
+`.beszel` marker directory created on the host first. Capacity only, since Beszel has no concept of
+a zpool, so pool health, vdev state and I/O are not covered.
 
 - [compose.yaml](./services/beszel/compose.yaml)
 - [Beszel - Getting started](https://beszel.dev/guide/getting-started)
@@ -328,8 +345,8 @@ concept of a zpool, so pool health, vdev state and I/O are not covered.
 
 > Coder provisions remote development environments defined as code, on your own infrastructure.
 
-Server plus its own Postgres. **Mounts the Docker socket read-write**, which provisioning requires
-and which makes anyone who can create a workspace root-equivalent on the host — weigh that before
+Server plus its own Postgres. It mounts the Docker socket read-write, which provisioning requires
+and which makes anyone who can create a workspace root-equivalent on the host. Weigh that before
 opening signups. `group_add` carries the host's `docker` gid, since the image runs as uid 1000.
 Workspace apps use the suffix wildcard `*-coder.$SERVICE_DOMAIN` rather than
 `*.coder.$SERVICE_DOMAIN`: a TLS wildcard matches exactly one label, so the suffix form is covered by
@@ -393,7 +410,7 @@ real domain, so it is not kept in git.
 
 A static nginx build, so one container with no database, no volumes and no environment: drawings live
 in the browser's `localStorage`, and clearing site data loses them. Note that the published image has
-Excalidraw's own endpoints compiled into the bundle — live collaboration, share links, the library
+Excalidraw's own endpoints compiled into the bundle, so live collaboration, share links, the library
 browser and the AI features all call out to the public service. Drawing locally stays local; those
 features do not. Repointing them means building a custom image, since Vite inlines the URLs at build
 time and no runtime override exists.
@@ -448,8 +465,8 @@ Ghost plus MySQL. Only Ghost is routed. Ghost stores absolute URLs in post conte
 > Immich is a high performance self-hosted photo and video management solution.
 
 Four containers: server, machine learning, a bundled Postgres and a Valkey queue. The database is
-not `services/postgres` — Immich requires the VectorChord and pgvecto.rs extensions for search
-embeddings. Tags float: the server and machine learning images publish no `latest`, so they track
+not `services/postgres`, because Immich requires the VectorChord and pgvecto.rs extensions for
+search embeddings. Tags float: the server and machine learning images publish no `latest`, so they track
 upstream's `release` tag, and the database image has no floating tag at all, since every tag encodes
 the Postgres major plus the exact extension versions. Everything except the server stays on the
 stack's private network, and all four are excluded from Watchtower because a release can run
@@ -751,8 +768,8 @@ OpenVPN.
 
 One hostname, two ports behind it: the GUI on `rclone.$SERVICE_DOMAIN` and the remote control API on
 `/api` of the same host, via `--rc-baseurl`. `rclone gui` refuses to put both on one port, and the
-browser calls the API directly, so it cannot stay internal — but sharing an origin avoids a second
-DNS record and certificate, and removes CORS entirely. The GUI learns the API address only from a
+browser calls the API directly, so it cannot stay internal. Sharing an origin avoids a second DNS
+record and certificate, and removes CORS entirely. The GUI learns the API address only from a
 `url=` query parameter and its login form has no field for it, so a `redirectregex` middleware
 rewrites the bare hostname to `/login?url=…`. No credentials ride in that URL: Traefik `basicauth`
 sits in front of both routers, and since Traefik forwards the `Authorization` header rather than

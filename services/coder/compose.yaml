@@ -12,10 +12,11 @@
 #   SERVICE_DOMAIN     - Traefik host rules, e.g. local.example.com
 #   CODER_DB_USER      - Postgres role owning the coder database
 #   CODER_DB_PASSWORD  - password for that role
-#   CODER_DOCKER_GID   - gid of the host's `docker` group, from
-#                        `getent group docker | cut -d: -f3`. On orion it is 984.
-#                        Wrong value and workspace provisioning fails with a
-#                        permission error on the socket rather than at startup.
+#   CODER_DOCKER_GID   - gid of the host's `docker` group, which varies per host:
+#                        `getent group docker | cut -d: -f3`. Wrong value and
+#                        workspace provisioning fails with a permission error on
+#                        the socket rather than at startup, so it looks healthy
+#                        until the first workspace is created.
 #
 # Remote development environments. Workspaces are provisioned by Terraform
 # templates; the starter template uses the Docker provider on this host, which

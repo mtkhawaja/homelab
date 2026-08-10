@@ -1,0 +1,106 @@
+# Documentation Reference:
+# https://github.com/garethgeorge/backrest
+# https://restic.readthedocs.io/
+#
+# Adapted from:
+# https://github.com/garethgeorge/backrest/blob/main/README.md (docker compose
+# example)
+#
+# Required variables. Supply them however suits: common.env, a second
+# --env-file, the shell environment, or Portainer's stack variables. Guarded,
+# so Compose refuses to start rather than interpolating an empty string.
+#
+#   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY - host path holding the config bind mounts
+#
+# A web UI and scheduler over restic. The image carries both binaries already,
+# rclone v1.74.4 and restic 0.19.1, so nothing is installed at runtime and the
+# rclone backends are available without adding anything.
+#
+# What to include and what to leave out is set in the plan, in the UI, not here.
+# The mounts below are only what Backrest is able to read.
+#
+# Everything being backed up is mounted READ-ONLY. A backup tool has no reason
+# to be able to write to its sources, and this one can read every secret in the
+# stack, so the mounts are the one place to be strict.
+#
+# /var/lib/docker/volumes is the important one. The named volumes are where
+# every database and every service's settings actually live, and they sit on
+# ext4 on the root disk rather than on either ZFS pool, so no snapshot covers
+# them. Docker does not have to be stopped to read them for a backup, but it
+# does to restore them.
+#
+# The docker socket is deliberately NOT mounted. Backrest supports pre-backup
+# hooks and the image ships a docker CLI, so dumping databases from a hook would
+# work, but `docker exec` needs a writable socket and that is root on the host.
+# This container can already read every secret in the stack; there is no need to
+# also make it able to start containers. The database dumps instead run host
+# side into the staging directory mounted below, and Backrest simply picks the
+# files up. That script and its systemd timer are a separate piece of work; the
+# mount is here so the path does not change when it lands.
+#
+# BACKREST_PORT is set explicitly even though the docker images already default
+# to 0.0.0.0:9898, because the native install defaults to 127.0.0.1 and the
+# difference is invisible until Traefik cannot reach it.
+#
+# TZ matters more than usual here: it is what the backup schedules are
+# interpreted in.
+#
+# The restic repository password is not configured here. It is set in the UI on
+# first run, along with the B2 credentials, and it is NOT recoverable -- losing
+# it loses the backup as completely as losing the machine. Store it somewhere
+# that is neither this repo nor this host.
+services:
+  backrest:
+    image: "garethgeorge/backrest:latest"
+    container_name: "backrest"
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - "proxy"
+    environment:
+      # Schedules are interpreted in this zone.
+      - TZ=America/New_York
+      - BACKREST_PORT=0.0.0.0:9898
+      - BACKREST_DATA=/data
+      - BACKREST_CONFIG=/config/config.json
+      - XDG_CACHE_HOME=/cache
+    volumes:
+      # Backrest's own config: repositories, plans, schedules, retention.
+      - "backrest-config:/config"
+      # Operation history and the restic binary Backrest manages.
+      - "backrest-data:/data"
+      # restic's cache. Without it every operation re-fetches repository
+      # metadata from B2, which turns a fast incremental into a slow one.
+      - "backrest-cache:/cache"
+      # ---- sources, all read-only ----
+      # Every named volume, so every database and every service's settings.
+      - "/var/lib/docker/volumes:/userdata/docker-volumes:ro"
+      # Config edited on the host, plus the env files, which exist nowhere else
+      # since the repo gitignores them. Exclude the media trees in the plan:
+      # plex, audiobookshelf, downloads, floatplane, ftp and qbit-mullvad are
+      # all re-acquirable. Do not exclude immich -- those are photos, not media.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding the config bind mounts}:/userdata/host:ro"
+      # Database dumps, written host side before the backup runs. Empty until
+      # that script exists; see the header.
+      - "${BASE_VOLUME_DIRECTORY:?required - host path holding the config bind mounts}/backups/dumps:/userdata/dumps:ro"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backrest.entrypoints=http"
+      - "traefik.http.routers.backrest.rule=Host(`backrest.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.middlewares.backrest-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.backrest.middlewares=backrest-https-redirect"
+      - "traefik.http.routers.backrest-secure.entrypoints=https"
+      - "traefik.http.routers.backrest-secure.rule=Host(`backrest.${SERVICE_DOMAIN:?required - the domain Traefik routes on}`)"
+      - "traefik.http.routers.backrest-secure.tls=true"
+      - "traefik.http.routers.backrest-secure.service=backrest"
+      - "traefik.http.services.backrest.loadbalancer.server.port=9898"
+      - "traefik.docker.network=proxy"
+networks:
+  proxy:
+    external: true
+volumes:
+  backrest-config:
+  backrest-data:
+  backrest-cache:

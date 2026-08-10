@@ -66,10 +66,18 @@ print -r -- "Derived $(wc -l < "$env_file" | tr -d ' ') placeholder variables"
 # given a :- default. Comment lines are skipped: several headers quote the old
 # broken syntax on purpose. `$$VAR` is excluded because that is a shell variable
 # for the container, not Compose interpolation.
+#
+# The trailing class has to exclude digits as well as letters and underscores.
+# It marks the end of a variable name, so every character a name may contain
+# belongs in it. With digits missing, a guarded ${FOO_1_DIRECTORY:?...} could
+# not match in full -- the `:` is excluded -- so the regex backtracked to the
+# longest prefix with an allowed next character, matched `${FOO_` followed by
+# `1`, and reported FOO_1 as unguarded. That failed correct files and pushed
+# variable names away from digits for no reason.
 unguarded_vars() {
   local file=$1
   grep -vE '^[[:space:]]*#' "$file" \
-    | grep -oE '(^|[^$])\$\{?[A-Z][A-Z0-9_]*\}?([^:a-zA-Z_}]|$)' \
+    | grep -oE '(^|[^$])\$\{?[A-Z][A-Z0-9_]*\}?([^:a-zA-Z0-9_}]|$)' \
     | grep -oE '[A-Z][A-Z0-9_]*' \
     | sort -u \
     | while read -r name; do
