@@ -6,8 +6,7 @@
 # --env-file, the shell environment, or Portainer's stack variables. Guarded,
 # so Compose refuses to start rather than interpolating an empty string.
 #
-#   SERVICE_DOMAIN        - Traefik host rules, e.g. local.example.com
-#   BASE_VOLUME_DIRECTORY - host path for the /nexus-data bind mount
+#   SERVICE_DOMAIN - Traefik host rules, e.g. local.example.com
 #
 # Two hostnames: the Nexus UI on nexus.$SERVICE_DOMAIN, and its Docker registry
 # connector on container-registry.$SERVICE_DOMAIN. The connector needs its own
@@ -19,12 +18,28 @@
 # resolved it non-deterministically. `registry` now unambiguously means the
 # upstream registry, and this is `nexus`.
 #
-# The container runs as uid 200, so $BASE_VOLUME_DIRECTORY/nexus/data has to be
-# owned by 200 before the first start.
+# /nexus-data was previously a bind mount at $BASE_VOLUME_DIRECTORY/nexus/data.
+# Nexus alone reads it, and it is the blob store and database rather than
+# anything browsed on the host, so it is now the named volume nexus-data. On an
+# existing deployment copy the data across before starting the new definition,
+# or Nexus comes up empty and generates a fresh admin password:
+#
+#   docker compose ... down
+#   docker volume create nexus-data
+#   docker run --rm \
+#     -v "$BASE_VOLUME_DIRECTORY/nexus/data:/from:ro" -v nexus-data:/to \
+#     alpine cp -a /from/. /to/
+#   docker compose ... up --detach
+#
+# cp -a keeps uid 200 on every file, which the container runs as. A fresh
+# install needs no chown: Docker seeds an empty named volume from the image's
+# /nexus-data, ownership included.
+#
+# Watchtower upgrades this like everything else. Nexus migrates its database on
+# upgrade and will not roll back, so keep a backup of the volume current.
 services:
   nexus:
-    # Not pinned, but excluded from Watchtower below, so upgrades stay manual.
-    # Nexus migrates its database on a major upgrade and will not roll back.
+    # The unsuffixed tag is the Alpine image, which is the default since 3.91.
     image: "sonatype/nexus3:latest"
     container_name: "nexus"
     restart: "unless-stopped"
@@ -34,16 +49,26 @@ services:
       - "proxy"
     environment:
       - TZ=America/New_York
+    ulimits:
+      # Nexus holds more open files than the Linux default allows, and running
+      # out can corrupt the blob store. Sonatype's floor is 65536.
+      nofile:
+        soft: 65536
+        hard: 65536
+    # The embedded database takes a while to flush on shutdown. Docker's 10s
+    # default sends SIGKILL mid-write; Sonatype suggests 120s.
+    stop_grace_period: 120s
     volumes:
-      # Verdict: convert to a named volume. Nexus alone reads this, and it is
-      # its blob store and database rather than anything browsed on the host.
-      # Left as a bind mount here so the move does not orphan it; the
-      # conversion, with the host-side copy, is its own commit.
-      - "${BASE_VOLUME_DIRECTORY:?required - host path for /nexus-data}/nexus/data:/nexus-data"
+      - "nexus-data:/nexus-data"
+    healthcheck:
+      # 200 once the server can answer read requests, 503 while starting or
+      # degraded. Startup takes two to three minutes, hence the start_period.
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8081/service/rest/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
     labels:
-      # Nexus will not survive an unattended major upgrade, so Watchtower is
-      # told to leave it alone.
-      - "com.centurylinklabs.watchtower.enable=false"
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       # Nexus UI
@@ -69,3 +94,6 @@ services:
 networks:
   proxy:
     external: true
+volumes:
+  nexus-data:
+    name: nexus-data
