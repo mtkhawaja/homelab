@@ -43,18 +43,25 @@ services:
     image: "sonatype/nexus3:latest"
     container_name: "nexus"
     restart: "unless-stopped"
+    # Soft reservation, not guaranteed physical RAM. Budget up to 18 GiB on
+    # the host: 8 GiB heap + 4 GiB direct memory + 6 GiB native/cache headroom.
+    mem_reservation: 8g
+    mem_limit: 18g
+    # Twice the default CPU weight under contention; no hard CPU cap.
+    cpu_shares: 2048
     security_opt:
       - no-new-privileges:true
     networks:
       - "proxy"
     environment:
       - TZ=America/New_York
+      - INSTALL4J_ADD_VM_PARAMS=-Xms8g -Xmx8g -XX:MaxDirectMemorySize=4g -Djava.util.prefs.userRoot=/nexus-data/javaprefs
     ulimits:
       # Nexus holds more open files than the Linux default allows, and running
-      # out can corrupt the blob store. Sonatype's floor is 65536.
+      # out can corrupt the blob store. Allow twice Sonatype's 65536 floor.
       nofile:
-        soft: 65536
-        hard: 65536
+        soft: 131072
+        hard: 131072
     # The embedded database takes a while to flush on shutdown. Docker's 10s
     # default sends SIGKILL mid-write; Sonatype suggests 120s.
     stop_grace_period: 120s
