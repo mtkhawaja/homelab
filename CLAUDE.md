@@ -17,7 +17,7 @@ docker compose \
 Everything lives under `services/`. `docker-volumes/` is gone.
 
 Add a second `--env-file` for services with their own, which sits beside the compose file — pi-hole,
-traefik, postgres and sonarqube have one:
+traefik, postgres, sonarqube and paperless have one:
 
 ```bash
 docker compose \

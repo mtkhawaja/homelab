@@ -2,31 +2,51 @@
 # https://docs.paperless-ngx.com/setup/
 # https://docs.paperless-ngx.com/configuration/
 #
-# Adapted from upstream's docker-compose.postgres-tika.yml.
+# Adapted from upstream's docker-compose.postgres-tika.yml:
+# https://github.com/paperless-ngx/paperless-ngx/blob/v3.3.1/docker/compose/docker-compose.postgres-tika.yml
 #
 # Required variables. Supply them however suits: common.env, a second
 # --env-file, the shell environment, or Portainer's stack variables. Guarded,
 # so Compose refuses to start rather than interpolating an empty string.
 #
-#   SERVICE_DOMAIN         - Traefik host rules, e.g. local.example.com
-#   BASE_VOLUME_DIRECTORY  - host path for the consume and export bind mounts
-#   PAPERLESS_DB_USER      - Postgres role owning the paperless database
-#   PAPERLESS_DB_PASSWORD  - password for that role
+#   SERVICE_DOMAIN                      - Traefik host rules, e.g. local.example.com
+#   BASE_VOLUME_DIRECTORY               - host path for the consume and export bind mounts
+#   PAPERLESS_DB_USER                   - Postgres role owning the paperless database
+#   PAPERLESS_DB_PASSWORD               - password for that role
+#   PAPERLESS_SECRET_KEY                - signs sessions and tokens; v3 refuses to start without it
+#   PAPERLESS_AI_LLM_API_KEY            - Anthropic API key
+#   PAPERLESS_AI_LLM_EMBEDDING_API_KEY  - Voyage AI API key
 #
-# The database credentials were POSTGRES_USER and POSTGRES_PASSWORD, both
-# falling back to `paperless`. Those names are shared with services/postgres and
-# services/sonarqube, so setting them for any one stack silently changed the
-# others. On an existing deployment set these two to what the database was
-# actually initialised with, which is paperless and paperless unless
-# POSTGRES_USER was set in common.env. Postgres ignores them once the data
-# directory exists, so a mismatch shows up as a failed login.
+# AI suggestions and chat are always on. They go to Anthropic and embeddings to
+# Voyage AI, since Anthropic has none, both through OpenAI-compatible endpoints.
+# Document content is sent to both providers. Both keys are required: an empty
+# embedding key would make Paperless reuse the Anthropic key and send it to
+# Voyage.
+#
+# Voyage trains on submitted data unless the organisation opts out, which only
+# covers data sent afterwards: opt out at
+# https://dashboard.voyageai.com/organization/tos before the first start.
+#
+# Optional overrides, defaulted below:
+#
+#   PAPERLESS_AI_LLM_MODEL               - model ID
+#   PAPERLESS_AI_LLM_ENDPOINT            - OpenAI-compatible base URL
+#   PAPERLESS_AI_LLM_EXTRA_PARAMS        - JSON merged over every request body
+#   PAPERLESS_AI_LLM_EMBEDDING_MODEL     - embedding model ID
+#   PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT  - OpenAI-compatible embeddings base URL
+#
+# Paperless forces tool use (tool_choice "required") and llama-index always
+# sends temperature 0.1. Haiku 5.5 thinks by default, which rules out forced tool
+# use, and rejects any temperature but 1. EXTRA_PARAMS is merged last, so it
+# overrides both. Opus 5.5 and Sonnet 5 reject temperature at any value and are
+# not usable here until llama-index stops sending it.
 #
 # Only the webserver joins the proxy network. broker, db, gotenberg and tika are
 # private to this stack rather than shared services, so they stay on the
 # internal network where nothing else can reach them.
 services:
   broker:
-    image: "docker.io/library/redis:8"
+    image: "docker.io/valkey/valkey:9-alpine"
     container_name: "paperless-broker"
     restart: "unless-stopped"
     security_opt:
@@ -35,6 +55,11 @@ services:
       - "paperless"
     volumes:
       - "paperless-broker-data:/data"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   db:
     image: "docker.io/library/postgres:18"
@@ -60,7 +85,7 @@ services:
       start_period: 30s
 
   gotenberg:
-    image: "docker.io/gotenberg/gotenberg:8.25"
+    image: "docker.io/gotenberg/gotenberg:8.37"
     container_name: "paperless-gotenberg"
     restart: "unless-stopped"
     security_opt:
@@ -72,10 +97,15 @@ services:
     command:
       - "gotenberg"
       - "--chromium-disable-javascript=true"
-      - "--chromium-allow-list=file:///tmp/.*"
+      - "--chromium-allow-list=^file:///tmp/.*"
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
 
   tika:
-    image: "docker.io/apache/tika:latest"
+    image: "docker.io/apache/tika:3.3.1.0"
     container_name: "paperless-tika"
     restart: "unless-stopped"
     security_opt:
@@ -84,7 +114,8 @@ services:
       - "paperless"
 
   webserver:
-    image: "ghcr.io/paperless-ngx/paperless-ngx:latest"
+    # The image ships its own healthcheck against port 8000.
+    image: "ghcr.io/paperless-ngx/paperless-ngx:3.3"
     container_name: "paperless"
     restart: "unless-stopped"
     security_opt:
@@ -96,14 +127,17 @@ services:
       db:
         condition: service_healthy
       broker:
-        condition: service_started
+        condition: service_healthy
       gotenberg:
-        condition: service_started
+        condition: service_healthy
       tika:
         condition: service_started
     environment:
       # See https://docs.paperless-ngx.com/configuration/
+      PAPERLESS_SECRET_KEY: "${PAPERLESS_SECRET_KEY:?required - Django secret key signing sessions and tokens}"
       PAPERLESS_REDIS: "redis://broker:6379"
+      # Required for Postgres; without it Paperless silently uses SQLite.
+      PAPERLESS_DBENGINE: "postgresql"
       PAPERLESS_DBHOST: "db"
       PAPERLESS_DBNAME: "paperless"
       PAPERLESS_DBUSER: "${PAPERLESS_DB_USER:?required - Postgres role owning the paperless database}"
@@ -111,27 +145,44 @@ services:
       PAPERLESS_TIKA_ENABLED: 1
       PAPERLESS_TIKA_GOTENBERG_ENDPOINT: "http://gotenberg:3000"
       PAPERLESS_TIKA_ENDPOINT: "http://tika:9998"
-      PAPERLESS_URL: "https://paperless.${SERVICE_DOMAIN:?required, see header}"
-      PAPERLESS_ALLOWED_HOSTS: "paperless.${SERVICE_DOMAIN:?required, see header}"
+      PAPERLESS_URL: "https://paperless.${SERVICE_DOMAIN:?required - routing domain, e.g. local.example.com}"
+      PAPERLESS_ALLOWED_HOSTS: "paperless.${SERVICE_DOMAIN:?required - routing domain, e.g. local.example.com}"
       PAPERLESS_USE_X_FORWARD_HOST: "true"
       PAPERLESS_USE_X_FORWARD_PORT: "true"
+      # Traefik terminates TLS and is the only ingress, since no port is
+      # published. One trusted hop lets login rate limiting see the client IP
+      # rather than Traefik's, which v3 otherwise answers with 403s.
+      PAPERLESS_PROXY_SSL_HEADER: '["HTTP_X_FORWARDED_PROTO", "https"]'
+      PAPERLESS_ALLAUTH_TRUSTED_PROXY_COUNT: 1
       PAPERLESS_TIME_ZONE: "America/New_York"
+      PAPERLESS_AI_ENABLED: "true"
+      PAPERLESS_AI_LLM_BACKEND: "openai-like"
+      PAPERLESS_AI_LLM_ENDPOINT: "${PAPERLESS_AI_LLM_ENDPOINT:-https://api.anthropic.com/v1/}"
+      PAPERLESS_AI_LLM_MODEL: "${PAPERLESS_AI_LLM_MODEL:-claude-haiku-5-5}"
+      PAPERLESS_AI_LLM_API_KEY: "${PAPERLESS_AI_LLM_API_KEY:?required - Anthropic API key}"
+      PAPERLESS_AI_LLM_EXTRA_PARAMS: '${PAPERLESS_AI_LLM_EXTRA_PARAMS:-{"temperature": 1, "tool_choice": "auto"}}'
+      PAPERLESS_AI_LLM_EMBEDDING_BACKEND: "openai-like"
+      PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT: "${PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT:-https://api.voyageai.com/v1}"
+      PAPERLESS_AI_LLM_EMBEDDING_MODEL: "${PAPERLESS_AI_LLM_EMBEDDING_MODEL:-voyage-4-lite}"
+      PAPERLESS_AI_LLM_EMBEDDING_API_KEY: "${PAPERLESS_AI_LLM_EMBEDDING_API_KEY:?required - Voyage AI API key}"
+      # Anthropic and Voyage are public; refuse endpoints resolving to private addresses.
+      PAPERLESS_AI_LLM_ALLOW_INTERNAL_ENDPOINTS: "false"
     volumes:
       # Application state and the document archive. Paperless alone reads both.
       - "data:/usr/src/paperless/data"
       - "media:/usr/src/paperless/media"
       # These two stay bind mounts: consume is where documents are dropped from
       # the host, and export is read back off it.
-      - "${BASE_VOLUME_DIRECTORY:?required, see header}/paperless/data/export:/usr/src/paperless/export"
-      - "${BASE_VOLUME_DIRECTORY:?required, see header}/paperless/data/consume:/usr/src/paperless/consume"
+      - "${BASE_VOLUME_DIRECTORY:?required - host directory bind mounts are rooted at}/paperless/data/export:/usr/src/paperless/export"
+      - "${BASE_VOLUME_DIRECTORY:?required - host directory bind mounts are rooted at}/paperless/data/consume:/usr/src/paperless/consume"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.paperless.entrypoints=http"
-      - "traefik.http.routers.paperless.rule=Host(`paperless.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.paperless.rule=Host(`paperless.${SERVICE_DOMAIN:?required - routing domain, e.g. local.example.com}`)"
       - "traefik.http.middlewares.paperless-https-redirect.redirectscheme.scheme=https"
       - "traefik.http.routers.paperless.middlewares=paperless-https-redirect"
       - "traefik.http.routers.paperless-secure.entrypoints=https"
-      - "traefik.http.routers.paperless-secure.rule=Host(`paperless.${SERVICE_DOMAIN:?required, see header}`)"
+      - "traefik.http.routers.paperless-secure.rule=Host(`paperless.${SERVICE_DOMAIN:?required - routing domain, e.g. local.example.com}`)"
       - "traefik.http.routers.paperless-secure.tls=true"
       - "traefik.http.routers.paperless-secure.service=paperless"
       - "traefik.http.services.paperless.loadbalancer.server.port=8000"

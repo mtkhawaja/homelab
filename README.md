@@ -649,9 +649,12 @@ is pinned to `olama` to match the old directory spelling, so the model weights a
 
 > A community-supported supercharged document management system: scan, index and archive all your physical documents.
 
-Five containers: the webserver plus Postgres, Redis, Gotenberg and Tika. Only the webserver joins
+Five containers: the webserver plus Postgres, Valkey, Gotenberg and Tika. Only the webserver joins
 `proxy`; the rest are private to the stack. Documents are dropped into
-`$BASE_VOLUME_DIRECTORY/paperless/data/consume` on the host.
+`$BASE_VOLUME_DIRECTORY/paperless/data/consume` on the host. AI suggestions and chat are always
+on and need an Anthropic API key and a Voyage AI key. Opt out of Voyage training at
+<https://dashboard.voyageai.com/organization/tos> before the first start; see
+[paperless.env.example](./services/paperless/paperless.env.example).
 
 - [compose.yaml](./services/paperless/compose.yaml)
 - [Paperless-ngx - Setup](https://docs.paperless-ngx.com/setup/)
