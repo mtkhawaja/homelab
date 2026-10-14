@@ -169,8 +169,8 @@ services:
       PAPERLESS_AI_LLM_ALLOW_INTERNAL_ENDPOINTS: "false"
     volumes:
       # Application state and the document archive. Paperless alone reads both.
-      - "data:/usr/src/paperless/data"
-      - "media:/usr/src/paperless/media"
+      - "paperless-data:/usr/src/paperless/data"
+      - "paperless-media:/usr/src/paperless/media"
       # These two stay bind mounts: consume is where documents are dropped from
       # the host, and export is read back off it.
       - "${BASE_VOLUME_DIRECTORY:?required - host directory bind mounts are rooted at}/paperless/data/export:/usr/src/paperless/export"
@@ -193,7 +193,7 @@ networks:
   paperless:
     driver: bridge
 volumes:
-  data:
-  media:
+  paperless-data:
+  paperless-media:
   paperless-db-data:
   paperless-broker-data:
