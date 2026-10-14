@@ -35,11 +35,13 @@
 #   PAPERLESS_AI_LLM_EMBEDDING_MODEL     - embedding model ID
 #   PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT  - OpenAI-compatible embeddings base URL
 #
-# Paperless forces tool use (tool_choice "required") and llama-index always
-# sends temperature 0.1. Haiku 5.5 thinks by default, which rules out forced tool
-# use, and rejects any temperature but 1. EXTRA_PARAMS is merged last, so it
-# overrides both. Opus 5.5 and Sonnet 5 reject temperature at any value and are
-# not usable here until llama-index stops sending it.
+# EXTRA_PARAMS is merged last into every LLM request, chat included, so it can
+# only hold settings valid without tools. llama-index always sends temperature
+# 0.1, which Haiku 5.5 rejects for anything but 1. Suggestions force tool use
+# (tool_choice "required"), which Anthropic refuses while thinking is on, and
+# Haiku 5.5 thinks by default; thinking is turned off instead. The OpenAI SDK
+# rejects unknown keyword arguments, so it goes through extra_body. Opus 5.5 and
+# Sonnet 5 reject temperature at any value and are not usable here.
 #
 # Only the webserver joins the proxy network. broker, db, gotenberg and tika are
 # private to this stack rather than shared services, so they stay on the
@@ -160,7 +162,7 @@ services:
       PAPERLESS_AI_LLM_ENDPOINT: "${PAPERLESS_AI_LLM_ENDPOINT:-https://api.anthropic.com/v1/}"
       PAPERLESS_AI_LLM_MODEL: "${PAPERLESS_AI_LLM_MODEL:-claude-haiku-5-5}"
       PAPERLESS_AI_LLM_API_KEY: "${PAPERLESS_AI_LLM_API_KEY:?required - Anthropic API key}"
-      PAPERLESS_AI_LLM_EXTRA_PARAMS: '${PAPERLESS_AI_LLM_EXTRA_PARAMS:-{"temperature": 1, "tool_choice": "auto"}}'
+      PAPERLESS_AI_LLM_EXTRA_PARAMS: '${PAPERLESS_AI_LLM_EXTRA_PARAMS:-{"temperature": 1, "extra_body": {"thinking": {"type": "disabled"}}}}'
       PAPERLESS_AI_LLM_EMBEDDING_BACKEND: "openai-like"
       PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT: "${PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT:-https://api.voyageai.com/v1}"
       PAPERLESS_AI_LLM_EMBEDDING_MODEL: "${PAPERLESS_AI_LLM_EMBEDDING_MODEL:-voyage-4-lite}"
